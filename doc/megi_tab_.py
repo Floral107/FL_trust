@@ -266,19 +266,17 @@ print("Accumulated Robustness Scores (2D):")
 print(R_accumulated)
 
 # Display the flattened robustness scores (1D array, optional)
-print("Flattened Robustness Scores (1D):")
-print(R_flattened)
+# print("Flattened Robustness Scores (1D):")
+# print(R_flattened)
 
 # Display the shape of results for verification
-print(f"Shape of Accumulated Scores: {R_accumulated.shape}")
-print(f"Length of Flattened Scores: {len(R_flattened)}")
+# print(f"Shape of Accumulated Scores: {R_accumulated.shape}")
+# print(f"Length of Flattened Scores: {len(R_flattened)}")
 
 # prompt: plot r_flattened on the histogram don't assume
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-# Assuming R_accumulated and R_flattened are already defined from the previous code
 
 # Create the distribution plot for R_flattened
 plt.figure(figsize=(10, 6))
@@ -287,14 +285,6 @@ plt.title('Distribution of Flattened Robustness Scores')
 plt.xlabel('Robustness Score')
 plt.ylabel('Frequency')
 plt.show()
-
-# prompt: same as above but just plot violin plot
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Assuming R_accumulated and R_flattened are already defined from the previous code
-# ... (your existing code) ...
 
 # Create the violin plot for R_flattened
 plt.figure(figsize=(10, 6))
@@ -430,12 +420,7 @@ most_robust_filtered, least_robust_filtered = display_robust_samples(
     n=20  # Number of samples to display
 )
 
-# prompt: Save the previous table generated in a format that is easy to load into excel.
-
 import pandas as pd
-
-# Assuming 'most_robust_filtered' and 'least_robust_filtered' DataFrames are defined from the previous code
-# ... (your existing code) ...
 
 # Concatenate the two DataFrames
 combined_df = pd.concat([most_robust_filtered, least_robust_filtered], ignore_index=True)
