@@ -1,0 +1,32 @@
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project]
+name = "imdbnoniid"
+version = "1.0.0"
+description = ""
+license = "Apache-2.0"
+dependencies = [ "flwr[simulation]>=1.16.0", "flwr-datasets[vision]>=0.5.0", "tensorflow>=2.11.1,<2.18.0",]
+
+[tool.flwr.app]
+publisher = "floral"
+
+[tool.flwr.federations]
+default = "local-simulation"
+
+[tool.flwr.app.components]
+serverapp = "imdbnoniid.server_app:app"
+clientapp = "imdbnoniid.client_app:app"
+
+[tool.flwr.app.config]
+num-server-rounds = 10
+local-epochs = 1
+batch-size = 32
+verbose = false
+
+[tool.flwr.federations.local-simulation.options]
+num-supernodes = 20
+
+[tool.hatch.build.targets.wheel]
+packages = [ ".",]
