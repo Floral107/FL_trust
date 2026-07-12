@@ -25,6 +25,12 @@ _pull/
 # raw per-seed result CSVs (already merged into data/combo/)
 /results_*.csv
 
+# internal pipeline docs, paper-splice scripts, superseded table builders
+PIPELINE.md
+TAB4_PIPELINE.md
+/_splice_*.py
+/build_tab4*.py
+
 # generated table bodies, tests/smokes, merge/gate utilities, one-off evals
 /tab*.tex
 /test_*.py

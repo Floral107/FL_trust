@@ -21,8 +21,8 @@ partitions, aggregated with FedAvg, 5 seeds. Released under the MIT License.
 | `compute_score_*.py`, `build_tab5.py`, `_run_figs.py`, `short_figs.py` | Table and figure generation |
 | `figs/` | Generated figures as used in the paper |
 | `run_experiments.ps1`, `run_et_experiments.{ps1,sh}`, `full_stdy_rerun.sh` | Experiment launchers |
+| `dashboard.py` | Streamlit dashboard for metric comparison and trade-off analysis |
 | `demo/` | Self-contained Streamlit demo (Docker + CI) for exploring results and live L1O scoring |
-| `PIPELINE.md` | The data → tables/figures pipeline, sign conventions, and gotchas |
 
 ## Reproducing
 
@@ -35,11 +35,11 @@ pip install -r requirements.txt
    Flower apps per dataset/seed and write per-round checkpoints; `robustness.py
    --method {gtg,l1o}_<metric>` produces the raw
    `results_<ds>_<seed>_<method>_<metric>_fedavg.csv` files. Post-hoc evals must
-   run on CPU (`CUDA_VISIBLE_DEVICES=`), see `PIPELINE.md`.
+   run on CPU (`CUDA_VISIBLE_DEVICES=`).
 2. **Tables & figures**: the merged results are included in `data/combo/` and
    `data/{bl,st,dy,et}/`, so step 1 can be skipped — run
-   `compute_score_diff.py`, `compute_score_fluct.py`, `build_tab5.py`,
-   `_run_figs.py` — see the ordered table in `PIPELINE.md`.
+   `compute_score_diff.py`, `compute_score_fluct.py`, `build_tab5.py`, and
+   `_run_figs.py`.
 
 Determinism: seeds `{42, 107, 123, 2025, 9928}`; `set_environment.ps1` pins
 `GLOBAL_SEED`, `PYTHONHASHSEED`, and TensorFlow determinism flags.
