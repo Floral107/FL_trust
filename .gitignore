@@ -25,6 +25,10 @@ _pull/
 # raw per-seed result CSVs (already merged into data/combo/)
 /results_*.csv
 
+# generated figures (regenerate with _run_figs.py; final versions live in the article)
+figs/
+data/combo/plots/
+
 # internal pipeline docs, paper-splice scripts, superseded table builders
 PIPELINE.md
 TAB4_PIPELINE.md
