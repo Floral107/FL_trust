@@ -1,0 +1,13 @@
+$env:GLOBAL_SEED = "9928"
+$env:PYTHONHASHSEED = $env:GLOBAL_SEED
+$env:TF_ENABLE_ONEDNN_OPTS = "0"
+$env:TF_DETERMINISTIC_OPS = "1"
+$env:TF_NUM_INTRAOP_THREADS = "1"
+$env:TF_NUM_INTEROP_THREADS = "1"
+$env:OMP_NUM_THREADS = "1"
+$env:TF_CUDNN_DETERMINISTIC = "1"
+# $env:CUDA_VISIBLE_DEVICES = "-1"
+
+
+# Test command to print out the seed
+Write-Output "GLOBAL_SEED: $env:GLOBAL_SEED"

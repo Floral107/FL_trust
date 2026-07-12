@@ -1,0 +1,44 @@
+# envs & caches
+.venv/
+__pycache__/
+.pytest_cache/
+.hf_cache/
+.tfhub_cache/
+.partition_cache/
+.claude/
+.vscode/
+
+# heavy training artifacts & model checkpoints (tens of GB)
+420/
+420_et_adv/
+420_et_dp/
+420_et_fair/
+420_fedprox/
+a40_snapshot/
+rescue_*/
+_archive/
+_pull/
+*.keras
+*.h5
+*.ckpt*
+
+# data: durable CSV artifacts are tracked; backups/staging are not
+data/_*
+data/combo_bak_*
+data/*.tgz
+
+# logs & backups
+logs/
+*.log
+*.bak*
+
+# paper sources (code release only)
+MAIN.tex
+FedKDD.tex
+
+# local-only notes & credentials
+vpn.txt
+STATUS_AUTONOMOUS.md
+MERGE_NOTES.md
+ASSESSMENT.md
+TAB4_SOLUTIONS.md

@@ -1,0 +1,44 @@
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project]
+name = "imdb"
+version = "1.0.0"
+description = ""
+license = "Apache-2.0"
+dependencies = [ "flwr[simulation]>=1.15.0,<1.16.0", "flwr-datasets[vision]>=0.5.0", "tensorflow>=2.11.1,<2.18.0",]
+
+[tool.flwr.app]
+publisher = "floral"
+
+[tool.flwr.federations]
+default = "local-simulation"
+
+[tool.flwr.app.components]
+serverapp = "imdb.server_app:app"
+clientapp = "imdb.client_app:app"
+
+[tool.flwr.app.config]
+num-server-rounds = 10
+local-epochs = 1
+batch-size = 32
+verbose = false
+strategy = "fedavg"
+proximal-mu = 0.0
+
+[tool.flwr.federations.local-simulation.options]
+num-supernodes = 20
+
+[tool.hatch.build.targets.wheel]
+packages = [ ".",]
+
+[tool.flwr.federations.local-simulation.options.backend.client-resources]
+num-cpus = 1
+num-gpus = 0.0
+
+# ponytail: 8 concurrent actors max — imdb client actors are ~3.6GB (USE+TF);
+# 16+ actors OOM-kill clients on a 62GB box and FedAvg silently aggregates
+# survivors (the 2026-07-08 BL poisoning). Raise only on a bigger-RAM host.
+[tool.flwr.federations.local-simulation.options.backend.init-args]
+num-cpus = 8
