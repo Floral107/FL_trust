@@ -22,6 +22,9 @@ _pull/
 *.h5
 *.ckpt*
 
+# raw per-seed result CSVs (already merged into data/combo/)
+/results_*.csv
+
 # data: durable CSV artifacts are tracked; backups/staging are not
 data/_*
 data/combo_bak_*
