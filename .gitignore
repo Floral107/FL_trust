@@ -25,6 +25,19 @@ _pull/
 # raw per-seed result CSVs (already merged into data/combo/)
 /results_*.csv
 
+# generated table bodies, tests/smokes, merge/gate utilities, one-off evals
+/tab*.tex
+/test_*.py
+/smoke_*.py
+/merge_*.py
+data/merge_collected.py
+data/combine_celeba_sources.py
+/sanity_gate.py
+/eval_acc_one.py
+/eval_resacc_one.py
+/eval_cap_ab.py
+/eval_celeba_res_e01.py
+
 # data: durable CSV artifacts are tracked; backups/staging are not
 data/_*
 data/combo_bak_*

@@ -16,7 +16,7 @@ partitions, aggregated with FedAvg, 5 seeds. Released under the MIT License.
 | `pgd_attack.py`, `cw_attack.py`, `eps_calibrate.py` | Adversarial robustness attacks |
 | `et_training.py`, `weighted_strategy.py`, `reweight_eval.py` | Explicit-trust training and score-based reweighting |
 | `robustness.py` | The post-hoc evaluation driver (`--method {gtg,l1o}_<metric>`) |
-| `cont_evals.py`, `sanity_gate.py` | Canonical per-round evaluation (single place for the loss-sign convention) + sanity gate |
+| `cont_evals.py` | Canonical per-round evaluation (single place for the loss-sign convention) |
 | `data/combo/`, `data/{bl,st,dy,et}/` | Durable merged result CSVs the tables/figures are built from |
 | `compute_score_*.py`, `build_tab5.py`, `_run_figs.py`, `short_figs.py` | Table and figure generation |
 | `figs/` | Generated figures as used in the paper |
@@ -36,10 +36,8 @@ pip install -r requirements.txt
    --method {gtg,l1o}_<metric>` produces the raw
    `results_<ds>_<seed>_<method>_<metric>_fedavg.csv` files. Post-hoc evals must
    run on CPU (`CUDA_VISIBLE_DEVICES=`), see `PIPELINE.md`.
-2. **Merge**: `merge_celeba.py` / `data/merge_collected.py` fold raw per-seed
-   files into `data/combo/` and `data/{bl,st,dy,et}/` (already included here,
-   so steps 1–2 can be skipped to regenerate paper assets directly).
-3. **Tables & figures**: run `python sanity_gate.py` (must PASS), then
+2. **Tables & figures**: the merged results are included in `data/combo/` and
+   `data/{bl,st,dy,et}/`, so step 1 can be skipped — run
    `compute_score_diff.py`, `compute_score_fluct.py`, `build_tab5.py`,
    `_run_figs.py` — see the ordered table in `PIPELINE.md`.
 
