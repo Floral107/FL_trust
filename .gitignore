@@ -36,6 +36,12 @@ logs/
 MAIN.tex
 FedKDD.tex
 
+# box-specific ops scripts (one-off fills, watchdogs, per-host launchers)
+*.sh
+!run_et_experiments.sh
+!full_stdy_rerun.sh
+jobs_*.txt
+
 # local-only notes & credentials
 vpn.txt
 STATUS_AUTONOMOUS.md

@@ -20,7 +20,7 @@ partitions, aggregated with FedAvg, 5 seeds. Released under the MIT License.
 | `data/combo/`, `data/{bl,st,dy,et}/` | Durable merged result CSVs the tables/figures are built from |
 | `compute_score_*.py`, `build_tab5.py`, `_run_figs.py`, `short_figs.py` | Table and figure generation |
 | `figs/` | Generated figures as used in the paper |
-| `run_experiments.ps1`, `run_et_experiments.{ps1,sh}`, `*.sh` | Experiment launchers (local and GPU-box variants) |
+| `run_experiments.ps1`, `run_et_experiments.{ps1,sh}`, `full_stdy_rerun.sh` | Experiment launchers |
 | `demo/` | Self-contained Streamlit demo (Docker + CI) for exploring results and live L1O scoring |
 | `PIPELINE.md` | The data → tables/figures pipeline, sign conventions, and gotchas |
 
@@ -31,7 +31,7 @@ python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-1. **Training + scoring**: `run_experiments.ps1` / the `*.sh` launchers run the
+1. **Training + scoring**: `run_experiments.ps1` / `run_et_experiments.sh` run the
    Flower apps per dataset/seed and write per-round checkpoints; `robustness.py
    --method {gtg,l1o}_<metric>` produces the raw
    `results_<ds>_<seed>_<method>_<metric>_fedavg.csv` files. Post-hoc evals must
