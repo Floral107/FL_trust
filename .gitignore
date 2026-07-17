@@ -25,6 +25,10 @@ _pull/
 # raw per-seed result CSVs (already merged into data/combo/)
 /results_*.csv
 
+# demo app lives in its own repo
+demo/
+.github/
+
 # generated figures (regenerate with _run_figs.py; final versions live in the article)
 figs/
 data/combo/plots/

@@ -21,7 +21,6 @@ partitions, aggregated with FedAvg, 5 seeds. Released under the MIT License.
 | `compute_score_*.py`, `build_tab5.py`, `_run_figs.py`, `short_figs.py` | Table and figure generation |
 | `run_experiments.ps1`, `run_et_experiments.{ps1,sh}`, `full_stdy_rerun.sh` | Experiment launchers |
 | `dashboard.py` | Streamlit dashboard for metric comparison and trade-off analysis |
-| `demo/` | Self-contained Streamlit demo (Docker + CI) for exploring results and live L1O scoring |
 
 ## Reproducing
 
