@@ -11,41 +11,36 @@ partitions, aggregated with FedAvg, 5 seeds. Released under the MIT License.
 | Path | What it is |
 |------|-----------|
 | `adult/ celeba/ cifar/ imdb/ *noniid/` | Flower client/server apps per dataset (`client_app.py`, `server_app.py`, `task.py`, `pyproject.toml`) |
-| `score_metrics.py`, `gtg_shap.py`, `inloop_scoring.py` | Contribution scoring (L1O, GTG-Shapley) |
+| `score_metrics.py`, `gtg_shap.py`, `inloop_scoring.py`, `fast_infer.py` | Contribution scoring (L1O, GTG-Shapley) |
 | `fairness_metric.py`, `robustness_metric.py`, `privacy_metric.py`, `attack_metric.py` | Trustworthiness metrics |
-| `pgd_attack.py`, `cw_attack.py`, `eps_calibrate.py` | Adversarial robustness attacks |
-| `et_training.py`, `weighted_strategy.py`, `reweight_eval.py` | Explicit-trust training and score-based reweighting |
+| `pgd_attack.py`, `cw_attack.py` | Adversarial robustness attacks |
+| `et_training.py`, `weighted_strategy.py`, `weighted_utils.py`, `reweight_eval.py` | Explicit-trust training and score-based reweighting |
 | `robustness.py` | The post-hoc evaluation driver (`--method {gtg,l1o}_<metric>`) |
 | `cont_evals.py` | Canonical per-round evaluation (single place for the loss-sign convention) |
-| `data/combo/`, `data/{bl,st,dy,et}/` | Durable merged result CSVs the tables/figures are built from |
-| `compute_score_*.py`, `build_tab5.py`, `_run_figs.py`, `short_figs.py` | Table and figure generation |
-| `run_experiments.ps1`, `run_et_experiments.{ps1,sh}`, `full_stdy_rerun.sh` | Experiment launchers |
-| `dashboard.py` | Streamlit dashboard for metric comparison and trade-off analysis |
+| `eval_{bl,et,stdy}_models.py`, `eval.ps1` | Batch model evaluation |
+| `run_experiments.ps1`, `run_et_experiments.{ps1,sh}` | Experiment launchers |
+| `data/combo/`, `data/{bl,st,dy,et}/` | The merged result CSVs the paper's tables and figures are built from |
 
-## Reproducing
+## Reproducing the result CSVs
 
 ```bash
 python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-1. **Training + scoring**: `run_experiments.ps1` / `run_et_experiments.sh` run the
-   Flower apps per dataset/seed and write per-round checkpoints; `robustness.py
-   --method {gtg,l1o}_<metric>` produces the raw
-   `results_<ds>_<seed>_<method>_<metric>_fedavg.csv` files. Post-hoc evals must
-   run on CPU (`CUDA_VISIBLE_DEVICES=`).
-2. **Tables & figures**: the merged results are included in `data/combo/` and
-   `data/{bl,st,dy,et}/`, so step 1 can be skipped — run
-   `compute_score_diff.py`, `compute_score_fluct.py`, `build_tab5.py`, and
-   `_run_figs.py`.
+1. **Training + in-loop scoring**: `run_experiments.ps1` /
+   `run_et_experiments.sh` run the Flower apps per dataset/seed and write
+   per-round checkpoints.
+2. **Post-hoc scoring**: `robustness.py --method {gtg,l1o}_<metric>` produces
+   the raw `results_<ds>_<seed>_<method>_<metric>_fedavg.csv` files, merged
+   into `data/combo/`. Post-hoc evals must run on CPU
+   (`CUDA_VISIBLE_DEVICES=`).
+
+The final merged CSVs are included under `data/`, so the paper's numbers can
+be checked without retraining.
 
 Determinism: seeds `{42, 107, 123, 2025, 9928}`; `set_environment.ps1` pins
 `GLOBAL_SEED`, `PYTHONHASHSEED`, and TensorFlow determinism flags.
-
-## Demo
-
-`demo/README.md` — Streamlit app (also Dockerized) to explore the precomputed
-results and score uploaded client CSVs via live leave-one-out.
 
 ## License
 

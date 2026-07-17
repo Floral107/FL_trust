@@ -33,11 +33,18 @@ demo/
 figs/
 data/combo/plots/
 
-# internal pipeline docs, paper-splice scripts, superseded table builders
+# internal pipeline docs, paper-splice scripts, table/figure builders, analysis extras
 PIPELINE.md
 TAB4_PIPELINE.md
 /_splice_*.py
-/build_tab4*.py
+/build_tab*.py
+/compute_score_*.py
+/eps_calibrate.py
+/_run_figs.py
+/short_figs.py
+/article_figs.ipynb
+/dashboard.py
+/weighting_effect.py
 
 # generated table bodies, tests/smokes, merge/gate utilities, one-off evals
 /tab*.tex
@@ -69,7 +76,6 @@ FedKDD.tex
 # box-specific ops scripts (one-off fills, watchdogs, per-host launchers)
 *.sh
 !run_et_experiments.sh
-!full_stdy_rerun.sh
 jobs_*.txt
 
 # local-only notes & credentials
