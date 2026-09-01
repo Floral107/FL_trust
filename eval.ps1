@@ -25,33 +25,31 @@ $seeds = @(42, 107, 123, 2025, 9928)
 function Run-Experiment {
     param ([int]$seedValue)
 
-    Write-Host "▶ Running experiment with seed $seedValue and method $method..."
+    Write-Host "> Running experiment with seed $seedValue and method $method..."
 
     $env:seed = "$seedValue"  # <-- make sure Python sees the seed!
 
-    $script_base = "C:\BME\7. felev\szakdoga\FLRobustness"
-    $robustness = Join-Path $script_base "robustness.py"
-    $accuracy   = Join-Path $script_base "accuracy.py"
-    $loss       = Join-Path $script_base "loss.py"
+    # robustness.py is THE post-hoc driver for every method, acc/loss included.
+    # (accuracy.py / loss.py were stale duplicates carrying their own sign flips
+    # and are archived; routing here keeps the loss-sign convention in one place.)
+    $robustness = Join-Path $PSScriptRoot "robustness.py"
 
-    if ($method -in @("gtg_rob", "l1o_rob",
-                       "l1o_adv", "gtg_adv",
-                       "l1o_adv_pgd", "gtg_adv_pgd",
-                       "l1o_adv_cw", "gtg_adv_cw",
-                       "l1o_fair", "gtg_fair",
-                       "l1o_fair_eo", "gtg_fair_eo")) {
-        & $venv_python $robustness --dataset=$dataset --partition=$partition --num_rounds=$rounds --seed=$seedValue --method=$method
-    }
-    elseif ($method -eq "gtg_acc") {
-        & $venv_python $accuracy --dataset=$dataset --partition=$partition --num_rounds=$rounds --seed=$seedValue --method=$method
-    }
-    elseif ($method -in @("gtg_loss", "l1o_loss")) {
-        & $venv_python $loss --dataset=$dataset --partition=$partition --num_rounds=$rounds --seed=$seedValue --method=$method
-    }
-    else {
-        Write-Host " Unknown method: $method"
+    $known = @("gtg_rob", "l1o_rob",
+               "l1o_adv", "gtg_adv",
+               "l1o_adv_pgd", "gtg_adv_pgd",
+               "l1o_adv_cw", "gtg_adv_cw",
+               "l1o_fair", "gtg_fair",
+               "l1o_fair_eo", "gtg_fair_eo",
+               "l1o_priv", "gtg_priv",
+               "l1o_acc", "gtg_acc",
+               "l1o_loss", "gtg_loss")
+
+    if ($method -notin $known) {
+        Write-Host "Unknown method: $method"
         exit 1
     }
+
+    & $venv_python $robustness --dataset=$dataset --partition=$partition --num_rounds=$rounds --seed=$seedValue --method=$method
 }
 
 if ($seed -eq "all") {

@@ -1,0 +1,353 @@
+# AUDIT.md — correctness review of what remains after the cleanup
+
+Scope: everything still at the repo root + `paper/` + the 8 Flower apps, after
+the `cleanup/repo-structure` reorganisation. `archive/` is not audited.
+
+Ordered by **how much damage the failure does before you notice it**. Every
+entry names the concrete failure, not the smell.
+
+---
+
+## P0 — silently corrupts numbers that end up in the paper
+
+### A1. A failed metric becomes the value `0.0`, indistinguishable from a real score
+`robustness_metric.py:66-68` · `attack_metric.py:62-64` · `attack_metric.py:372-374`
+
+```python
+except Exception as e:
+    print(f"[ERROR] PGD robustness failed for {dataset_name}: {e}")
+    return 0.0
+```
+
+`rel`, `res` and `cw` all return `0.0` on *any* internal failure — OOM, an XLA
+device error, a missing app dir, a dtype mismatch. That `0.0` is returned to
+`cont_evals.l1o_evals` / `gtg_evals` as a legitimate utility.
+
+**Failure:** in LOO, `contribution = global_metric − 0.0 = global_metric`, i.e. the
+failing client gets the single largest positive contribution in the round — a
+large, plausible, completely fabricated number. In GTG the poisoned coalition
+utility shifts every player's marginal contribution. Nothing in the row marks it
+invalid, and `robustness.py` exits 0.
+
+**Fix shape:** return `float("nan")`, or re-raise and let A4 handle it. `nan`
+propagates visibly and the existing `pd.to_numeric(..., errors="coerce")` guards
+downstream already tolerate it.
+
+### A2. One failing coalition silently rewrites every client's Shapley value
+`cont_evals.py:316-318`
+
+```python
+except Exception as e:
+    print(f"Error in subset {subset} utility ({dataset}): {e}")
+    return 0.0
+```
+
+Same mechanism as A1, but inside the Shapley permutation loop, where a single
+bad `u(S)` enters ~30 marginal-contribution differences.
+
+### A3. A failing client is dropped from the round instead of failing the round
+`cont_evals.py:286-287`
+
+The per-client `try` in `l1o_evals` prints and continues, so `contributions` comes
+back with K−1 entries and `robustness.py:281-292` writes K−1 rows for that round.
+
+**Failure:** the round is silently narrower than every other round. `paper/sanity_gate.py:48`
+(`if not Ms or len({len(x) for x in Ms}) != 1`) then throws away the *entire*
+(dataset, K) cell as "degenerate" rather than reporting the gap — so a partial
+failure is laundered into a missing table cell.
+
+### A4. A totally failed sweep exits 0 with a 0-row CSV
+`robustness.py:299-300`
+
+The whole per-round body — model load, metric, LOO/GTG, CSV flush — is inside one
+`except Exception as e: print(...)`. A systematic failure (wrong `--partition`,
+GPU-after-PGD XLA error, missing app dir) prints one line per round and the
+process still exits 0.
+
+**Failure:** this is the documented CPU-only-eval trap. A multi-hour job "finishes"
+having written nothing; the only way to notice is to count rows afterwards. Add a
+non-zero exit when zero rows were written, and let unexpected exception types
+propagate.
+
+### A5. Adult reliability ignores its own input and re-loads the *IID* dataset
+`robustness_metric.py:60-62`
+
+```python
+from adult.adult.task import load_data as load_adult_data
+_, _, x_test, _, meta = load_adult_data(partition_id=0, num_partitions=1, ...)
+```
+
+The `x_test` argument passed in by `cont_evals` is discarded and replaced.
+
+**Failure, three ways:**
+1. `rel` for **`adultnoniid`** is computed on data loaded through the **IID** app.
+2. `robustness.py --eval_subset N` (`robustness.py:249-268`) is silently ignored for
+   adult `rel`, so adult rel rows are computed on a different test set size than
+   the adult rows for every other metric in the same combo file.
+3. A host that deploys only `adultnoniid/` raises `ModuleNotFoundError` here —
+   which A1 converts into `rel = 0.0`.
+
+---
+
+## P1 — results are not reproducible from the command line
+
+### A6. GTG results depend on the run's interruption history
+`robustness.py:243` (`set_seed(seed)`) · `gtg_shap.py:58` (`np.random.randint`) · `gtg_shap.py:118` (`np.random.shuffle`)
+
+`set_seed(seed)` is called **once per seed**, outside the `num_clients` and `round`
+loops. `GTGShapley` then draws from the *global* numpy RNG — once at construction
+and 30 times per round in `compute()`. So round *r*'s permutations depend on how
+many rounds were scored before it **in the same process**.
+
+Three ways the same command produces different numbers:
+- **Resume.** `_load_done_keys` (`robustness.py:184-197`) skips already-written rounds,
+  so a resumed run scores the remaining rounds against a different RNG stream than
+  a fresh run would.
+- **`FLR_ROUND_ORDER`** (`robustness.py:216-232`) reorders rounds.
+- **`--num_clients`** decides whether K=20 consumes RNG before K=4.
+
+**Failure:** `gtg_*` columns in `data/combo/` cannot be regenerated from
+`(dataset, seed, method)` alone — you also need to know how the original run was
+interrupted. LOO is unaffected (no RNG). **Fix shape:** move `set_seed` inside the
+round loop, or seed a `np.random.Generator` per `(seed, K, round)` in `GTGShapley`.
+
+### A7. Missing `seed` env var crashes inside a Ray worker with an unreadable trace
+`adult/adult/task.py:6` · and the same line in all 7 other apps
+
+```python
+SEED = int(os.environ.get("seed"))     # TypeError if unset
+```
+
+Import-time, inside Flower/Ray workers. **Failure:** forgetting `$env:seed` produces
+`TypeError: int() argument must be a str... not 'NoneType'` buried in worker logs
+rather than a one-line "set `seed`". A default + explicit error message costs one line.
+
+Related: `reweight_eval.py:32` works around this with `os.environ.setdefault("seed","42")`,
+which means **anything that imports `reweight_eval`** — `eval_bl_models.py:21`,
+`eval_et_models.py`, `eval_stdy_models.py:26` — silently pins seed 42 for data
+loading regardless of what the caller intended.
+
+### A8. GTG's convergence criterion is dead code; it always runs exactly 30 permutations
+`gtg_shap.py:54-60` and `gtg_shap.py:155-176`
+
+`converge_min = max(30, num_players) = 30` and
+`max_number = min(2**K, ..., max_permutations=30) = 30`.
+So `_check_convergence` returns `False` while `index < 30` and `True` at `index == 30`
+— lines 160-176 are unreachable.
+
+**Failure:** not a wrong number, but `convergence_criteria`, `last_k` and
+`convergence_denom_floor` are inert. MAIN.tex:347 reports ε₂ = 0.05 as a GTG
+parameter that governs sampling; in this code it governs nothing. Tuning it will
+waste a day, and it is exactly the kind of thing a reviewer asks about.
+
+---
+
+## P2 — config / code / paper drift
+
+### A9. `priv` in `data/combo/` and `priv` in `data/{bl,st,dy,et}/` are different measurements
+`robustness.py:157-158,263` vs `privacy_metric.py:53-54` vs `reweight_eval.py:257-261` vs MAIN.tex:347
+
+| | fine-tune epochs | fine-tune lr | member_ratio | attack_train_ratio |
+|---|---|---|---|---|
+| `robustness.py` → `data/combo/` (Tab. 3/4) | **5** | **5e-4** | **0.2** | **0.7** |
+| `MIAConfig` defaults → `data/{bl,st,dy,et}/` (Tab. 5) | 2 | 1e-3 | 0.5 | 0.5 |
+| MAIN.tex:347 | 2 | 1e-3 | 0.5 | 0.5 |
+
+**Failure:** a `priv` value in Tab. 3/4 is not comparable to a `priv` value in
+Tab. 5, and the combo one does not match the protocol the paper describes. Pick
+one config (the `MIAConfig` defaults match the paper) and make `robustness.py`
+use it, or state the difference explicitly in MAIN.tex.
+
+### A10. `attack_metric.py`'s own docstring contradicts its parameter table
+`attack_metric.py:8-14` (says CelebA ε=0.03, α=0.007) vs `attack_metric.py:19` (`(0.01, 0.0025, 40)`)
+
+MAIN.tex:347 confirms the **code** is correct. **Failure:** stale comment; the next
+person tuning CelebA `res` trusts the docstring.
+
+### A11. The in-loop CelebA `res` proxy attacks a 3× larger ε than the metric it's scored against
+`score_metrics.py:195` (claims "same eps/alpha as the post-hoc eval") vs `score_metrics.py:200` (`celeba: (0.03, 0.007, 7)`) vs `attack_metric.py:19` (`celeba: (0.01, 0.0025, 40)`)
+
+adult and imdb do match on ε/α (only the iteration count differs, which is the
+documented affordability trade-off). CelebA does not.
+
+**Failure:** ST/DY `res`-weighting on CelebA optimises client weights for a
+perturbation budget that is not the one Tab. 5 evaluates them at.
+
+### A12. Default ET config does not reproduce the paper's ET rows
+`adultnoniid/pyproject.toml:31`, `celebanoniid/pyproject.toml:33`, `imdbnoniid/pyproject.toml:32` vs MAIN.tex:868
+
+- `et-lambda-fair = 0.5` in all three; MAIN.tex says **λ = 2.0**. (The 0.5→2.0 fix
+  was applied at run time and never written back to the config.)
+- `celebanoniid/pyproject.toml:34,37`: `et-adv-ratio = 0.5`, `et-adv-steps = 7`;
+  MAIN.tex says **100 % of batches and 10 steps** for CelebA. `imdbnoniid` already
+  has `1.0` / `10`.
+
+**Failure:** `./run_et_experiments.sh celebanoniid 4 fair 42` with the committed
+config reproduces the *superseded* result, not the published one.
+
+### A13. `requirements.txt` cannot run the first step of the pipeline
+`requirements.txt`
+
+Missing: `tqdm` (`robustness.py:33` — the main driver), `requests`
+(`imdbnoniid/imdbnoniid/task.py:126`), `scipy` (`paper/sanity_gate.py:25`,
+`paper/compute_score_diff.py:8`), `matplotlib` (`paper/_run_figs.py:6`).
+
+Also `tensorflow`, `keras` and `numpy` are unpinned here, while the app
+`pyproject.toml`s pin `tensorflow>=2.11.1,<2.18.0` and the `.keras` checkpoints in
+`420/` were written by TF 2.17 / Keras 3.2. Two dependency declarations, disagreeing.
+
+**Failure:** `pip install -r requirements.txt && python robustness.py ...` on a
+clean box dies with `ModuleNotFoundError: No module named 'tqdm'`, and a
+sufficiently new TF may not read the saved models at all.
+
+### A14. The interpreter on this machine is in exactly that broken state
+Not a repo bug, but it blocks any local verification.
+
+`numpy 2.4.6` is installed against `tensorflow 2.17.1`, which requires `numpy<2.1`
+→ `import tensorflow` raises
+`SystemError: initialization of _pywrap_checkpoint_reader raised unreported exception`.
+`flwr 1.16.0` also violates the `<1.16.0` pin in every `pyproject.toml`.
+This is the "this laptop has a TF DLL issue" noted at `test_weighted_strategy.py:4`.
+
+**Fix applied:** a pinned `.venv` (`numpy<2.1`, `tensorflow==2.17.1`, `flwr<1.16`,
+plus the four missing packages) — see the end-to-end run below.
+
+---
+
+## P3 — entry points and paths
+
+### A15. `eval.ps1` is broken for the three cheapest methods, on every machine
+`eval.ps1:32-34` and `eval.ps1:45-50`
+
+```powershell
+$script_base = "C:\BME\7. felev\szakdoga\FLRobustness"   # absolute, machine-specific
+$accuracy    = Join-Path $script_base "accuracy.py"       # archived
+$loss        = Join-Path $script_base "loss.py"           # archived
+```
+
+`accuracy.py` / `loss.py` were retired as stale duplicates *with their own sign
+flips* and now live in `archive/old_archive/stale_drivers/`.
+
+**Failure:** `.\eval.ps1 adultnoniid noniid 10 gtg_acc 42` → "The term ... is not
+recognized". README.md advertises this script. `robustness.py` already handles
+`*_acc` and `*_loss`, so all three branches should route there.
+
+### A16. `robustness.py` finds no checkpoints when run from anywhere but the repo root
+`robustness.py:87` (`BASE_DIR = "./420"`, cwd-relative) vs `adultnoniid/adultnoniid/task.py:16` (`BASE_DIR.parent / "420"`, file-relative)
+
+**Failure:** run from a subdirectory it prints `Directory not found: ./420/...` per
+cell and exits 0 with an empty CSV — A4 again, with no error. Resolve `BASE_DIR`
+from `__file__` like the apps do.
+
+### A17. Running an experiment dirties a git-tracked file
+`set_num_cl.py:22-67`
+
+`set_num_cl.py` regex-rewrites `<ds>/pyproject.toml`, which is tracked in git.
+
+**Failure:** every training run leaves `git status` dirty and can commit a stray
+`num-supernodes`, so `git status` stops being a usable signal mid-experiment.
+
+### A18. `reweight_eval.load_test_data` maps every IID dataset name to the non-IID loader
+`reweight_eval.py:149-166`
+
+`"adult" in d` → `adultnoniid.adultnoniid.task`; same for celeba and imdb.
+
+**Failure:** latent. All current callers pass non-IID names, so nothing is wrong
+today — but `eval_bl_models.py --datasets adult` would silently score IID models
+against non-IID test data and report it as valid.
+
+### A19. Metric modules import the IID `imdb` app even when scoring `imdbnoniid`
+`cont_evals.py:13` · `robustness_metric.py:204` · `attack_metric.py:172` · `attack_metric.py:427`
+
+All four do `from imdb.imdb.task import process_text`, while `reweight_eval.py:226`
+does the same import from `imdbnoniid`. The lazy-import comments say the point was
+to survive hosts that deploy only the `*noniid` dirs — but the module they import
+is the IID one.
+
+**Failure:** on an `imdbnoniid`-only host these raise `ModuleNotFoundError`, which
+A1/A2 convert to `0.0` metric values. Half-fixed instance of the same bug class
+that already cost a re-run.
+
+---
+
+## P4 — results-CSV schema and completeness
+
+### A20. Combo column names are not uniform, and one consumer doesn't compensate
+`data/combo/*.csv` headers · `robustness.py:289-291` · `reweight_eval.py:71-79`
+
+- adult / celeba / imdb: `<method>_loss_contribution`. **cifar: bare `loss_contribution`.**
+- adult / cifar carry `<method>_priv_abs_contribution` and `<method>_fair_eo_abs_contribution`; celeba / imdb do not.
+- `robustness.py:291` writes a generic `abs_contribution` column that no combo file preserves.
+
+`paper/compute_score_diff.py:29-40` and `paper/sanity_gate.py:34-35` both defend with
+a `pick(*candidates)` fallback. `reweight_eval.py:72-73` does **not**:
+
+```python
+"loss": "loss_contribution",   # exists only in cifar
+"acc":  "acc_contribution",
+```
+
+**Failure:** `reweight_eval.run_experiment` would hit `score_col not in df_s.columns`
+(`reweight_eval.py:120-122`) and silently `continue` past any loss-targeted group.
+Masked today only because `TARGET_DIMS` uses fairDP/res/priv.
+
+### A21. Silent holes in the shipped results
+Measured from the files as they stand:
+
+| File | Hole |
+|---|---|
+| `results_adult_gtg.csv` | 20 NaN in `gtg_adv_contribution` |
+| `results_celeba_gtg.csv` | 400 NaN in `gtg_rob_contribution` |
+| `results_celeba_l1o.csv` | 400 NaN `l1o_rob_contribution`; 160 NaN each in acc / fair / fair_eo / loss |
+| `results_celebanoniid_{gtg,l1o}.csv` | 40 NaN across 5-6 contribution columns |
+| all 4 adult + cifar files | `*_priv_abs_contribution` is 1200/1200 NaN — column exists, never populated |
+| `420/celebanoniid/20/42` | 92 of the expected 211 checkpoints |
+| `420/celebanoniid/20/107` | missing entirely |
+
+**Failure:** every downstream aggregation is a `pandas` mean, which skips NaN
+silently. A CelebA `rel` cell is averaged over the seeds that happen to have data,
+and the table reports it as a 5-seed mean. There is no coverage assertion anywhere
+in `paper/`.
+
+### A22. The documented CelebA merge step cannot run
+`archive/oneoffs/merge_celeba.py:35`
+
+`SRC_DIR = data/celeba_to_distribute` — the directory does not exist. `PIPELINE.md`
+lists this as the merge step for CelebA.
+
+Also `merge_celeba.py:105`: `groupby(KEY, as_index=False).mean(numeric_only=True)`
+silently averages duplicate keys instead of erroring, so a double-merge produces a
+plausible wrong number.
+
+### A23. `data/README.md` documents two artifacts that don't exist
+`data/README.md` — "Regenerating / collecting" cites `data/weighting_effect.csv`
+(absent) and `bash collect_data.sh` (now `archive/old_archive/collect_data.sh`).
+`weighting_effect.py` itself is now in `archive/oneoffs/` per your call.
+
+---
+
+## P5 — dead / misleading code
+
+| # | Location | Issue |
+|---|---|---|
+| A24 | `score_metrics.py:334` | `return name.lower() == "loss" and False` — always `False`, no callers. |
+| A25 | `<ds>/task.py:278` (all 8 apps) | `set_num_clients()` uses `toml.dump()`, which `set_num_cl.py:18-21` documents as *breaking* Flower's config reader. Unused but callable. |
+| A26 | `<ds>/task.py:276` | module-level `config = toml.load(toml_file)` — assigned, never read. |
+| A27 | `weighted_strategy.py:45` | imports `fedavg_aggregate`, never calls it; the class has an identical `_aggregate_fedavg` at line 208. Third copy: `robustness_metric.aggregate_models`. |
+| A28 | `weighted_strategy.py:223` | `adopt_reweighted_or_fallback` — the retired do-no-harm guard, superseded by β/cap shrinkage. Its docstring points at `build_tab4_final.py`, now in `archive/superseded/`. |
+| A29 | `gtg_shap.py:186,189` | mojibake in Hungarian comments (`legr\ufffdvidebb`). Lines 236 and 253 `print()` raw Shapley vectors to stdout from `_normalize_values`. |
+
+---
+
+## Suggested order of attack
+
+1. **A1 + A2 + A4** together — one change of policy (`nan` instead of `0.0`, non-zero
+   exit on zero rows). This is the difference between "a failure is loud" and
+   "a failure is a number in your thesis".
+2. **A6** — seed per round. Without it no GTG number is reproducible on demand.
+3. **A5** — adult `rel` on the wrong partition is a correctness bug in shipped data.
+4. **A13 + A15** — makes the release installable and its documented entry point work.
+5. **A9 / A11 / A12** — decide which number is canonical, then make config and
+   MAIN.tex agree. Cheap, and exactly what a reviewer probes.
+6. **A21** — add a coverage assertion to `paper/sanity_gate.py` so holes fail the gate.
+7. The rest is hygiene.
