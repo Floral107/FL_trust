@@ -20,6 +20,8 @@ partitions, aggregated with FedAvg, 5 seeds. Released under the MIT License.
 | `eval_{bl,et,stdy}_models.py`, `eval.ps1` | Batch model evaluation |
 | `run_experiments.ps1`, `run_et_experiments.{ps1,sh}` | Experiment launchers |
 | `data/combo/`, `data/{bl,st,dy,et}/` | The merged result CSVs the paper's tables and figures are built from |
+| `paper/` | Paper assembly: `sanity_gate.py` (run first), table/figure builders, `MAIN.tex` splicers. Run from the repo root: `python paper/sanity_gate.py`. See `PIPELINE.md`. |
+| `archive/` | Retired material — compute-box snapshots, per-host scripts, one-off analyses, superseded builders, data backups. Not part of the pipeline; not to be re-run. See `REPO_MAP.md`. |
 
 ## Reproducing the result CSVs
 
