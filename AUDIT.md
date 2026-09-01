@@ -106,6 +106,19 @@ Three ways the same command produces different numbers:
 - **`FLR_ROUND_ORDER`** (`robustness.py:216-232`) reorders rounds.
 - **`--num_clients`** decides whether K=20 consumes RNG before K=4.
 
+**Confirmed empirically** (2026-09-01, `archive/verification/`). Same command,
+same checkpoints, only `FLR_ROUND_ORDER` reversed:
+
+```
+global_gtg_acc        max|diff| = 0.000e+00    <- identical models + identical data
+gtg_acc_contribution  max|diff| = 3.880e-03
+rows differing:       21 / 40
+```
+
+`global_gtg_acc` being bit-identical proves the models and test set are the same;
+the whole difference is the RNG stream. On contributions that range 0.000-0.066,
+3.9e-3 is 6-20 % of a typical value.
+
 **Failure:** `gtg_*` columns in `data/combo/` cannot be regenerated from
 `(dataset, seed, method)` alone — you also need to know how the original run was
 interrupted. LOO is unaffected (no RNG). **Fix shape:** move `set_seed` inside the
@@ -199,6 +212,35 @@ Also `tensorflow`, `keras` and `numpy` are unpinned here, while the app
 **Failure:** `pip install -r requirements.txt && python robustness.py ...` on a
 clean box dies with `ModuleNotFoundError: No module named 'tqdm'`, and a
 sufficiently new TF may not read the saved models at all.
+
+### A30. The ADULT feature pipeline runs at eval time against unpinned scikit-learn/pandas
+`adultnoniid/adultnoniid/task.py:171-265` · `requirements.txt`
+
+`load_data` calls `fetch_openml(data_id=1590)` and re-fits `OneHotEncoder` +
+`StandardScaler` + `train_test_split` **on every evaluation**. Unlike CelebA
+(`.npz` partition cache) and IMDB (content-hashed embedding cache), ADULT has no
+cached snapshot — the exact test matrix is a function of the installed
+scikit-learn and pandas versions, neither of which `requirements.txt` pins.
+
+**Measured** (2026-09-01): a clean-room re-run of `adultnoniid` / K=4 / seed 42 /
+`l1o_acc` on pinned TF 2.17 + numpy 1.26 but sklearn 1.9.0 / pandas 3.0.5
+reproduced all 40 shipped rows with the correct schema, but not bit-exactly:
+
+```
+global_l1o_acc        max|diff| = 7.166e-03    exact: 4/40
+l1o_acc_contribution  max|diff| = 7.575e-03    exact: 5/40
+```
+
+~7e-3 on 9 769 test rows is ~70 samples landing on the other side of the split —
+consistent with a slightly different train/test partition, not a scrambled
+feature order (feature count is still 108, so the saved models load correctly).
+I did not isolate which library is responsible.
+
+**Failure:** the ADULT columns of `data/combo/` cannot be reproduced exactly on a
+fresh install, and the discrepancy is the same order of magnitude as the smaller
+contributions themselves. **Fix shape:** pin `scikit-learn` and `pandas`, or cache
+the processed ADULT matrix to disk the way CelebA and IMDB already do — which
+would also stop every eval re-downloading and re-encoding the dataset.
 
 ### A14. The interpreter on this machine is in exactly that broken state
 Not a repo bug, but it blocks any local verification.
@@ -351,3 +393,29 @@ plausible wrong number.
    MAIN.tex agree. Cheap, and exactly what a reviewer probes.
 6. **A21** — add a coverage assertion to `paper/sanity_gate.py` so holes fail the gate.
 7. The rest is hygiene.
+
+---
+
+## Appendix — end-to-end verification run (2026-09-01)
+
+Environment: fresh `.venv` built from the corrected `requirements.txt`
+(TF 2.17.1, numpy 1.26.4, flwr 1.15.x); the global interpreter is unusable, see A14.
+
+| Check | Result |
+|---|---|
+| `python paper/sanity_gate.py` (from repo root) | **GATE PASSED** — all 6 paper family x method cells positive; cifar reported as info only |
+| `robustness.py --dataset adultnoniid --partition noniid --num_rounds 10 --seed 42 --method l1o_acc --num_clients 4` | exit 0, 40 rows, 0 NaN, schema exact |
+| same, `--method gtg_acc` | exit 0, 40 rows, schema exact |
+| same, `--method gtg_acc` with `FLR_ROUND_ORDER` reversed | exit 0 — and 21/40 contributions differ (see A6) |
+| `test_weighted_strategy.py` | 13/13 pass (the 3 strategy tests un-skip once TF/flwr import) |
+| `test_inloop_scoring.py` | 5/5 pass |
+| `smoke_lossflag.py` | not run — needs the IMDB USE embedder (network + ~1 GB download) |
+
+Emitted schema, matching `robustness.py:281-292` exactly:
+
+```
+dataset, partition, num_clients, seed, round, client_id,
+global_<method>, <method>_contribution, abs_contribution
+```
+
+Artifacts kept under `archive/verification/`.
