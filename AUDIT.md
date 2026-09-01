@@ -396,6 +396,78 @@ plausible wrong number.
 
 ---
 
+## Appendix — forensics: which findings actually touched the shipped numbers?
+
+Run 2026-09-01 against `data/combo/` as it stands. This is the question that
+decides whether a fix needs a re-run or not.
+
+### A1 / A2 / A4 — LATENT, not realized. No re-run needed.
+
+Scanned all 16 combo files for the failure signature: a LOO row where
+`<method>_<metric>_contribution == global_<method>_<metric>` exactly (which is
+what `contribution = global - 0.0` produces), and any `global_*` recorded as
+exactly `0.0`.
+
+```
+(no hits in any combo file)
+```
+
+So no shipped number was ever produced by a swallowed exception. The `0.0`-on-
+failure path is a live hazard for the *next* run, not damage already done —
+which means **A1/A2/A4 can be fixed without invalidating anything**.
+
+### A5 — REALIZED, but numerically negligible. Fix the code; no re-run.
+
+At `num_partitions=1` both ADULT apps return the whole dataset, so I checked
+whether the 80/20 split actually differs. It does — the IID app slices
+positionally while the non-IID app reorders by Dirichlet class-grouping before
+`train_test_split(random_state=42)`:
+
+```
+adult/      (IID app):   x_test (9769, 108)   y mean 0.231139
+adultnoniid/(NIID app):  x_test (9769, 108)   y mean 0.240864
+identical: False       row overlap: 1943/9769 = 19.9%
+```
+
+So in every `results_adultnoniid_*` row, `rel` is measured on a test set sharing
+only ~20 % of its rows with the one used for acc / loss / fair / res / priv.
+Same defect reaches `data/{bl,st,dy,et}` via `reweight_eval.eval_all_metrics`.
+
+Measured impact on round-10 global `rel`, shipped path vs. correct path:
+
+```
+  K  seed | rel AS SHIPPED  rel ON CORRECT SET      diff
+  4    42 |       0.990026            0.989528  +0.00050
+  4   107 |       0.986355            0.987136  -0.00078
+  4   123 |       0.988750            0.989014  -0.00026
+ 20    42 |       0.988561            0.989189  -0.00063
+ 20   107 |       0.987367            0.987347  +0.00002
+ 20   123 |       0.988617            0.988035  +0.00058
+  max |diff| = 0.00078    mean |diff| = 0.00046
+```
+
+ADULT `rel` is saturated near 0.988, so any reasonable test split lands in the
+same place. Against the shipped rel contributions
+(`l1o_rob` median 4.0e-3, p90 8.4e-3; `gtg_rob` median 2.7e-3, p90 6.6e-3) a
+7.8e-4 perturbation is ~20 % of a typical value at worst, and only 6-8 % of
+non-zero rows are smaller than it. The true contribution error is smaller still,
+since contribution is a *difference* of two values computed on the same wrong
+set, so most of the offset cancels.
+
+**Verdict:** fix `robustness_metric.py:60-62` so it stops discarding `x_test`,
+but the published ADULT rel numbers stand.
+
+### A6 — REALIZED and material. Fixing it changes published numbers.
+
+See A6 above: 21/40 contributions move by up to 3.9e-3 on values ranging
+0.000-0.066. Any fix re-derives every `gtg_*` column in `data/combo/`.
+
+### A30 — REALIZED. Environment pinning, not a code fix.
+
+max|diff| 7.6e-3 on a clean-room ADULT re-run; see A30.
+
+---
+
 ## Appendix — end-to-end verification run (2026-09-01)
 
 Environment: fresh `.venv` built from the corrected `requirements.txt`
