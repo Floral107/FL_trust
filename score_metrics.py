@@ -328,7 +328,7 @@ def build_metric(name: str, x_test, y_test, s_test=None, dataset=None) -> Callab
     raise ValueError(f"unknown metric name: {name!r}")
 
 
-# Whether to set GTGShapley(loss_flag=True) for this metric.
-# Currently all metrics are framed as "higher = better" (loss is negated).
-def is_loss_metric(name: str) -> bool:
-    return name.lower() == "loss" and False  # always returns False — we negate loss
+# NOTE: is_loss_metric() was removed 2026-09-01. Its body was
+# `return name.lower() == "loss" and False`, i.e. constant False, and it had no
+# callers. Every metric here is framed higher=better (build_loss_metric negates),
+# so GTGShapley(loss_flag=...) stays False for the in-loop path.

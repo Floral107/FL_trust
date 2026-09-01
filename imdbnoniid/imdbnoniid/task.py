@@ -2,7 +2,29 @@
 
 import os
 #------------------------------------#
-SEED = int(os.environ.get("seed"))
+def _require_seed() -> int:
+    """Read the mandatory `seed` env var.
+
+    Bare `int(os.environ.get("seed"))` raised
+    `TypeError: int() argument must be ... not 'NoneType'` at import time, inside
+    a Flower/Ray worker, where the traceback is buried in worker logs. Say what
+    is actually wrong instead.
+    """
+    raw = os.environ.get("seed")
+    if raw is None:
+        raise RuntimeError(
+            "environment variable 'seed' is not set. Every task.py reads it at "
+            "import time. Set it before launching: PowerShell `$env:seed = '42'`, "
+            "bash `export seed=42`. run_experiments.ps1 / run_et_experiments.sh "
+            "do this for you."
+        )
+    try:
+        return int(raw)
+    except ValueError as e:
+        raise RuntimeError(f"environment variable 'seed' must be an integer, got {raw!r}") from e
+
+
+SEED = _require_seed()
 #------------------------------------#
 
 
@@ -67,7 +89,6 @@ def set_seed(seed: int):
 
 USE_MODEL = None  # Lazy-loaded on first call to process_text to avoid GPU OOM at import time
 _USE_EMBED_CHUNK = 256  # texts per USE forward pass; keeps peak VRAM/RAM manageable
-
 
 
 def load_model():
@@ -227,18 +248,12 @@ def get_num_clients():
     # Extracting values
     num_clients = config["tool"]["flwr"]["federations"]["local-simulation"]["options"]["num-supernodes"]
     return num_clients
-config = toml.load(toml_file)
+# NOTE: the dead module-level `config = toml.load(...)` and `set_num_clients()`
+# that used to sit here were removed 2026-09-01. set_num_clients() rewrote
+# pyproject.toml with toml.dump(), which quotes hyphenated keys and restructures
+# table headers -- both break Flower's config reader. It had no callers; the real
+# patcher is set_num_cl.py at the repo root, which does targeted regex edits.
 
-def set_num_clients(num_clients):
-    
-    config = toml.load(toml_file)
-
-    config["tool"]["flwr"]["federations"]["local-simulation"]["options"]["num-supernodes"] = num_clients
-
-    with open(toml_file, "w") as f:
-        toml.dump(config, f)
-        
-        
 def _resolve_save_dir(
     strategy: str = "fedavg",
     et_mode: str = "none",
@@ -266,7 +281,6 @@ def _resolve_save_dir(
     if s == "fedavg":
         return path_to_save
     return os.path.join(str(BASE_DIR.parent), f"420_{s}", os.path.basename(path_to_save))
-
 
 
 def train_with_proximal(model, x, y, mu, epochs, batch_size, verbose=0, shuffle=False):

@@ -1,10 +1,31 @@
 """cifarnoniid: A Flower / TensorFlow app."""
 
 
-
 import os
 #------------------------------------#
-SEED = int(os.environ.get("seed"))
+def _require_seed() -> int:
+    """Read the mandatory `seed` env var.
+
+    Bare `int(os.environ.get("seed"))` raised
+    `TypeError: int() argument must be ... not 'NoneType'` at import time, inside
+    a Flower/Ray worker, where the traceback is buried in worker logs. Say what
+    is actually wrong instead.
+    """
+    raw = os.environ.get("seed")
+    if raw is None:
+        raise RuntimeError(
+            "environment variable 'seed' is not set. Every task.py reads it at "
+            "import time. Set it before launching: PowerShell `$env:seed = '42'`, "
+            "bash `export seed=42`. run_experiments.ps1 / run_et_experiments.sh "
+            "do this for you."
+        )
+    try:
+        return int(raw)
+    except ValueError as e:
+        raise RuntimeError(f"environment variable 'seed' must be an integer, got {raw!r}") from e
+
+
+SEED = _require_seed()
 #------------------------------------#
 
 
@@ -51,7 +72,6 @@ set_seed(SEED)  # Set seed for reproducibility
 
 # Make TensorFlow log less verbose
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
 
 
 def load_model(weight_decay=5e-4):
@@ -106,8 +126,6 @@ def load_model(weight_decay=5e-4):
         metrics=['accuracy'],
     )
     return model
-
-
 
 
 fds = None  # Cache FederatedDataset
@@ -196,7 +214,6 @@ def load_data(partition_id, num_partitions):
     )
 
 
-
 def get_num_clients():
     # Load the pyproject.toml file
     config = toml.load(toml_file)
@@ -204,16 +221,11 @@ def get_num_clients():
     # Extracting values
     num_clients = config["tool"]["flwr"]["federations"]["local-simulation"]["options"]["num-supernodes"]
     return num_clients
-config = toml.load(toml_file)
-
-def set_num_clients(num_clients):
-    
-    config = toml.load(toml_file)
-
-    config["tool"]["flwr"]["federations"]["local-simulation"]["options"]["num-supernodes"] = num_clients
-
-    with open(toml_file, "w") as f:
-        toml.dump(config, f)
+# NOTE: the dead module-level `config = toml.load(...)` and `set_num_clients()`
+# that used to sit here were removed 2026-09-01. set_num_clients() rewrote
+# pyproject.toml with toml.dump(), which quotes hyphenated keys and restructures
+# table headers -- both break Flower's config reader. It had no callers; the real
+# patcher is set_num_cl.py at the repo root, which does targeted regex edits.
 
 def _resolve_save_dir(strategy: str = "fedavg") -> str:
     """FedAvg saves to 420/<dataset>/..., FedProx to 420_fedprox/<dataset>/..."""
@@ -221,7 +233,6 @@ def _resolve_save_dir(strategy: str = "fedavg") -> str:
     if s == "fedavg":
         return path_to_save
     return os.path.join(str(BASE_DIR.parent), f"420_{s}", os.path.basename(path_to_save))
-
 
 
 def train_with_proximal(model, x, y, mu, epochs, batch_size, verbose=0, shuffle=False):
@@ -281,6 +292,5 @@ def save_global_model(model, client_num, round_num, strategy="fedavg"):
     else:
         model_path = os.path.join(model_dir, f"global_model_round_{round_num}.keras")
         model.save(model_path)
-
 
 

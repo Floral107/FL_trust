@@ -214,6 +214,12 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
                 s_test = s_test[:eval_subset]
 
     header_written = os.path.exists(out_path) and os.path.getsize(out_path) > 0
+    # Tallied so main() can exit non-zero on a sweep that produced nothing. The
+    # per-round `except` below keeps a partial failure from killing the run, but
+    # without these counters a TOTAL failure also exited 0 with an empty CSV —
+    # the CPU-only-eval trap, which looked identical to success.
+    rows_written = 0
+    rounds_failed = 0
     done_keys = _load_done_keys(out_path)
     if done_keys:
         print(f"[resume] skipping {len(done_keys)} already-computed (seed, num_clients, round) rows from {out_path}")
@@ -295,9 +301,13 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
                     chunk = pd.DataFrame(rows)
                     chunk.to_csv(out_path, mode="a", index=False, header=not header_written)
                     header_written = True
+                    rows_written += len(rows)
 
                 except Exception as e:
                     print(f"Error evaluating {exp_dir} round {round_num}: {e}")
+                    rounds_failed += 1
+
+    return rows_written, rounds_failed
 
 
 def main():
@@ -312,7 +322,7 @@ def main():
     _out_suffix = os.environ.get("FLR_OUT_SUFFIX", "")
     out = f"results_{args.dataset}_{args.seed}_{args.method}{_out_suffix}_{args.strategy}.csv"
 
-    evaluate_all(
+    rows_written, rounds_failed = evaluate_all(
         root_dir=root_dir,
         dataset=args.dataset,
         partition=args.partition,
@@ -324,8 +334,18 @@ def main():
         num_clients_only=args.num_clients,
     )
 
-    print(f"Results saved to {out}")
+    print(f"Results saved to {out}  ({rows_written} new rows, {rounds_failed} rounds failed)")
+    if rows_written == 0 and not _load_done_keys(out):
+        print(f"[FATAL] no rows written to {out} and nothing was resumable — "
+              f"check --partition/--dataset, the {root_dir} tree, and that "
+              f"post-hoc evals are on CPU (FLR_FORCE_CPU=1).", file=sys.stderr)
+        return 1
+    if rounds_failed:
+        print(f"[WARN] {rounds_failed} round(s) failed; the CSV is incomplete.",
+              file=sys.stderr)
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

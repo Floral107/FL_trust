@@ -314,8 +314,12 @@ def gtg_evals(metric_fun, model_dir, num_clients, x_test, y_test, round_num,
             return float(metric_fun(eval_model, x_test, dataset, y_test))
 
         except Exception as e:
+            # NaN, never 0.0. A 0.0 utility is indistinguishable from a real
+            # measurement, and one poisoned coalition enters ~30 marginal
+            # differences, silently reshaping EVERY player's Shapley value.
+            # NaN propagates to the whole round instead, which is the truth.
             print(f"Error in subset {subset} utility ({dataset}): {e}")
-            return 0.0
+            return float("nan")
 
     gtg = GTGShapley(num_players=num_clients, loss_flag=loss_flag)
     gtg.set_utility_function(utility_function)

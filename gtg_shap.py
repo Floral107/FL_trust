@@ -183,10 +183,10 @@ class GTGShapley:
             return []
 
         if self.loss_flag:
-            # loss: min + legr�videbb
+            # loss: lowest utility, shortest coalition as tie-break
             best = min(valid.items(), key=lambda x: (x[1], len(x[0])))
         else:
-            # utility: max + legr�videbb
+            # utility: highest utility, longest coalition as tie-break
             best = max(valid.items(), key=lambda x: (x[1], -len(x[0])))
 
         return list(best[0])
@@ -233,8 +233,6 @@ class GTGShapley:
         if all(abs(v) < 1e-12 for v in vals):
             return {i: 1.0 / num_players for i in range(num_players)}
       
-        print("raw_values")
-        print(vals)
         # Step 1: shift all values upward by |min| to stabilize scale
         min_val = min(vals)
         shift = abs(min_val)
@@ -250,8 +248,6 @@ class GTGShapley:
             i: math.copysign(abs(shifted[i]) / total_abs, vals[i])
             for i in range(num_players)
         }
-        print("norm_values")
-        print(normalized)
         return normalized
 
 

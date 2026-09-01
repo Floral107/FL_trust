@@ -56,6 +56,46 @@ filenames is the OLD numbering; `build_tab5.py` replaced them after the box-era
 `generate_thesis_table.py` was lost with the box. `archive/oneoffs/merge_imdb_rerun.py` was the
 one-time fold-in of the 2026-07-10 IMDB rerun + celeba gtg_loss recompute.)
 
+## Known limitation: GTG is not reproducible from the CLI alone
+
+`gtg_*` numbers depend on the **order rounds were scored in**, not just on
+`(dataset, seed, method)`.
+
+`robustness.py` calls `set_seed(seed)` once per seed, outside the round loop,
+while `GTGShapley` draws from the global numpy RNG (once at construction, then
+30 shuffles per round). So round *r*'s permutations depend on how many rounds ran
+before it in the same process. Three things change the stream:
+
+- **resuming** an interrupted run (`_load_done_keys` skips finished rounds),
+- **`FLR_ROUND_ORDER`**,
+- **`--num_clients`** (whether K=20 consumes RNG before K=4).
+
+Measured 2026-09-01 on `adultnoniid` / K=4 / seed 42 / `gtg_acc`, forward vs.
+reversed round order: `global_gtg_acc` identical to the bit, but **21 of 40**
+`gtg_acc_contribution` values moved, by up to 3.9e-3 on contributions spanning
+0.000-0.066.
+
+**Consequence:** the `gtg_*` columns in `data/combo/` cannot be re-derived
+exactly without knowing how the original sweep was interrupted. LOO is
+unaffected (no RNG). Treat GTG contributions as estimates with ~4e-3 of sampling
+noise, which is what they are.
+
+**Not fixed on purpose.** Seeding per `(seed, K, round)` would make GTG
+reproducible going forward, but every `gtg_*` column already in `data/combo/` was
+produced under the current stream, so the fix would make the shipped data
+un-reproducible from the fixed code. Deferred until a `gtg_*` re-run is happening
+anyway. See `AUDIT.md` A6.
+
+## Known limitation: ADULT is re-derived from OpenML at eval time
+
+`adult*/task.py::load_data` re-fetches OpenML 1590 and re-fits the
+encoder/scaler/split on **every** call, and `requirements.txt` pins neither
+`scikit-learn` nor `pandas`. CelebA caches partitions to `.npz` and IMDB caches
+USE embeddings; ADULT caches nothing. A clean-room re-run of
+`adultnoniid`/K=4/seed 42/`l1o_acc` reproduced all 40 rows but with max|diff|
+7.6e-3. Pin those two packages, or cache the processed matrix, before claiming
+bit-exact ADULT reproduction. See `AUDIT.md` A30.
+
 ## Gotchas that keep coming back
 
 - Post-hoc evals run on CPU (`CUDA_VISIBLE_DEVICES=`); GPU eval after PGD hits
@@ -77,3 +117,15 @@ Retired material — box snapshots, per-host `.sh` scripts, one-off analyses,
 superseded builders, tarball pulls, data backups, old status notes — now lives
 under a single `archive/`. Nothing there is part of the pipeline; nothing there
 may be re-run. See `REPO_MAP.md`.
+
+## Coverage gate
+
+`python paper/sanity_gate.py` now also reports, per (dataset, metric, K), how
+many of the 5 seeds actually back each final-round cell. Every builder
+aggregates with a plain pandas mean, which drops NaN silently, so a thin cell
+renders identically to a full one. Warn-only by default; `--strict` makes an
+under-covered cell fail the gate.
+
+As of 2026-09-01 there are **17 under-covered cells**, the worst being
+`results_celeba_l1o.csv` K=4, where `acc` / `loss` / `fair` / `fair_eo` are each
+backed by **1 of 5 seeds** yet reported as mean +/- std.

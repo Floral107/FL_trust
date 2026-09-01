@@ -46,8 +46,41 @@ def load_client_models(model_dir, num_clients, round_num):
             print(f"Loaded model for Client {client_id}: {latest_model_file}")
     return client_models
 
+# One-hot layout (cat_slices / n_cat) for the ADULT feature matrix. Needed by the
+# tabular noise model, identical for every caller of a given app, and expensive to
+# obtain (load_data re-fetches from OpenML and re-fits the encoder). LOO/GTG call
+# the metric once per coalition, so cache it per app module.
+_ADULT_META_CACHE = {}
+
+
+def _adult_meta(dataset_name: str) -> dict:
+    """OHE column layout for `dataset_name`, taken from THAT dataset's own app.
+
+    Must match the app whose test set the caller passed in: the IID and non-IID
+    ADULT apps produce different 80/20 splits (~20% row overlap), so pulling the
+    layout - and previously the data itself - from adult/ while scoring
+    adultnoniid measured reliability on a different test set than every other
+    metric in the same row.
+    """
+    if dataset_name not in _ADULT_META_CACHE:
+        if dataset_name == "adultnoniid":
+            from adultnoniid.adultnoniid.task import load_data as _ld
+        else:
+            from adult.adult.task import load_data as _ld
+        *_, meta = _ld(partition_id=0, num_partitions=1, sigma=None, return_meta=True)
+        _ADULT_META_CACHE[dataset_name] = meta
+    return _ADULT_META_CACHE[dataset_name]
+
+
 def calculate_robustness_score(model, x_test, dataset_name, y_test = None,  sigma=0.1, L=100):
-    """Calculate robustness score with memory-efficient processing"""
+    """Calculate robustness score with memory-efficient processing.
+
+    Returns NaN on failure, never 0.0: a 0.0 is a legitimate metric value, so
+    returning it on error made a failed evaluation indistinguishable from a
+    genuinely non-robust model. In LOO that turned into
+    `contribution = global - 0.0 = global`, i.e. the failing client scored as the
+    round's largest positive contributor. NaN propagates visibly instead.
+    """
     try:
         if dataset_name in ("imdb", "imdbnoniid"):
             return calculate_text_robustness(model, x_test, L)
@@ -56,16 +89,18 @@ def calculate_robustness_score(model, x_test, dataset_name, y_test = None,  sigm
             return calculate_image_robustness(model, x_test, sigma, L)
         elif dataset_name in ("adult", "adultnoniid"):
             sigma = 0.1
-            # TISZTA adatot kérünk + meta-t
-            from adult.adult.task import load_data as load_adult_data
-            _, _, x_test, _, meta = load_adult_data(partition_id=0, num_partitions=1, sigma=None, return_meta=True)
-            return calculate_tabular_robustness(model=model, data=x_test, sigma=sigma, L=L, meta=meta)
+            # Score the test set the CALLER passed in (so --eval_subset is honoured
+            # and non-IID stays non-IID); only the OHE layout comes from the app.
+            return calculate_tabular_robustness(
+                model=model, data=x_test, sigma=sigma, L=L,
+                meta=_adult_meta(dataset_name),
+            )
         else:
             print(f"Unsupported dataset: {dataset_name}")
-            return 0.0
+            return float("nan")
     except Exception as e:
         print(f"Error in calculate_robustness_score: {str(e)}")
-        return 0.0
+        return float("nan")
 
 
 
@@ -228,7 +263,7 @@ def calculate_text_robustness(model, texts, L=100, batch_size=256, noise_level=0
         print(f"Error in robustness calculation: {str(e)}")
         import traceback
         traceback.print_exc()
-        return 0.0
+        return float("nan")   # never 0.0 - see calculate_robustness_score docstring
 
 
 def add_noise(text, noise_level=0.1):

@@ -7,7 +7,8 @@ from cw_attack import cw_l2_attack, _wrap_sigmoid_as_softmax
 
 # Per-dataset PGD evaluation parameters (MAIN.tex, Experiments setup):
 #   ADULT  : eps=0.3,    alpha=0.007,  40 iters
-#   CelebA : eps=0.03,   alpha=0.007,  40 iters
+#   CelebA : eps=0.01,   alpha=0.0025, 40 iters (eps lowered from the standard
+#            0.03, which saturated resilience to 0; see MAIN.tex Setup)
 #   IMDB   : eps=0.005, alpha=0.00125, 10 iters (attack in USE-embedding space;
 #            eps recalibrated 2026-07-08 on the converged LR=1e-3 baseline: the
 #            old 0.0015 left BL res~=clean acc (0.87), 0.005 -> BL res 0.47,
@@ -53,15 +54,19 @@ def calculate_pgd_score(model, x_test, dataset_name, y_test,
 
     if dataset_name not in dispatch:
         print(f"Unsupported dataset: {dataset_name}")
-        return 0.0
+        return float("nan")
 
     try:
         return dispatch[dataset_name](
             model, x_test, y_test, epsilon, alpha, num_iter, batch_size
         )
     except Exception as e:
+        # NaN, never 0.0: 0.0 is a legitimate resilience value (attack always
+        # succeeds), so returning it on failure made a crashed evaluation look
+        # like a real measurement, and in LOO it inflated the failing client's
+        # contribution to the full global metric.
         print(f"[ERROR] PGD robustness failed for {dataset_name}: {e}")
-        return 0.0
+        return float("nan")
 
 
 def calculate_pgd_image_robustness(model, x_test, y_test,
@@ -359,7 +364,7 @@ def calculate_cw_score(model, x_test, dataset_name, y_test,
     }
     if dataset_name not in dispatch:
         print(f"Unsupported dataset: {dataset_name}")
-        return 0.0
+        return float("nan")
     try:
         return dispatch[dataset_name](
             model, x_test, y_test,
@@ -371,7 +376,7 @@ def calculate_cw_score(model, x_test, dataset_name, y_test,
         )
     except Exception as e:
         print(f"[ERROR] CW robustness failed for {dataset_name}: {e}")
-        return 0.0
+        return float("nan")   # never 0.0 - see calculate_pgd_score
 
 
 def _subsample_indices(n, k, seed=0):

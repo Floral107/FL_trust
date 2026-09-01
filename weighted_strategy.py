@@ -42,8 +42,8 @@ from flwr.server.strategy import FedAvg
 from weighted_utils import (
     shift_and_normalize,
     weighted_aggregate,
-    fedavg_aggregate,
-)
+)   # fedavg_aggregate is NOT imported: this class has its own identical
+    # _aggregate_fedavg below. inloop_scoring.py still uses the shared one.
 
 log = logging.getLogger("WeightedFedAvg")
 log.setLevel(logging.INFO)
@@ -219,26 +219,12 @@ class WeightedFedAvg(FedAvg):
             out.append(layer_acc)
         return out
 
-    @staticmethod
-    def adopt_reweighted_or_fallback(
-        reweighted_acc: float, baseline_acc: float, delta: float = 0.1
-    ) -> bool:
-        """Do-no-harm safeguard for the ST/DY scenarios (post-training selection).
-
-        The score transformation (``shift_and_normalize``) is unbounded, so in the
-        degenerate limit where GTG truncation drives the contribution scores toward
-        one-hot, almost all aggregation weight lands on a single client and the
-        reweighted global model can collapse. To keep the intervention safe by
-        construction, the trustworthiness-reweighted model is ADOPTED only when its
-        held-out accuracy stays within ``delta`` of the size-weighted baseline;
-        otherwise the baseline (uniform FedAvg) model is reported for that setting.
-
-        Returns True to adopt the reweighted model, False to fall back to baseline.
-        The decision depends only on the two final-model accuracies, so it is
-        applied deterministically at model-selection / reporting time (the Tab.4
-        application lives in ``build_tab4_final.py`` using the same rule).
-        """
-        return (baseline_acc - reweighted_acc) <= delta
+    # NOTE: adopt_reweighted_or_fallback() was removed 2026-09-01. It was the
+    # post-hoc "do-no-harm" guard (adopt the reweighted model only if its
+    # accuracy stayed within delta of baseline), superseded by the shrink_beta /
+    # shrink_cap transform above, which is collapse-proof by construction rather
+    # than by post-hoc selection. Its docstring pointed at build_tab4_final.py,
+    # itself superseded by paper/build_tab5.py.
 
     @staticmethod
     def _align_weights(
