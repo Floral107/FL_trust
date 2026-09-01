@@ -6,6 +6,21 @@ the `cleanup/repo-structure` reorganisation. `archive/` is not audited.
 Ordered by **how much damage the failure does before you notice it**. Every
 entry names the concrete failure, not the smell.
 
+## Status as of 2026-09-01
+
+| | Findings | State |
+|---|---|---|
+| Fixed | A1, A2, A4, A5, A7, A10, A13, A15, A21, A24, A26, A27, A28, A29 | Commits `d3e8d2d`, `f3d95dd`. Verified number-neutral: an `l1o_acc` re-run is bit-identical to the pre-fix output. |
+| Fixed (dead code removed) | A25 | `set_num_clients()` deleted from all 8 `task.py`; recoverable from git history. |
+| Documented, deliberately not fixed | A6, A30 | Both would change published numbers. Written into `PIPELINE.md` as known limitations. |
+| Open — needs your decision | A9, A11, A12 | Config/paper drift. Fixing means deciding which number is canonical, then re-running or amending MAIN.tex. |
+| Open — hygiene | A3, A8, A14, A16, A17, A18, A19, A20, A22, A23 | No decision needed; none is urgent. |
+
+**A21's first catch:** the new coverage check found 17 under-covered cells. The
+worst is `results_celeba_l1o.csv` at K=4, where `acc`, `loss`, `fair` and
+`fair_eo` are each backed by **1 of 5 seeds** while being reported as mean ± std.
+See the coverage section below.
+
 ---
 
 ## P0 — silently corrupts numbers that end up in the paper
