@@ -37,7 +37,7 @@ packages = [ ".",]
 num-cpus = 1
 num-gpus = 0.0
 
-# ponytail: 8 concurrent actors max — imdb client actors are ~3.6GB (USE+TF);
+# Concurrency cap: 8 actors max — imdb client actors are ~3.6GB (USE+TF);
 # 16+ actors OOM-kill clients on a 62GB box and FedAvg silently aggregates
 # survivors (the 2026-07-08 BL poisoning). Raise only on a bigger-RAM host.
 [tool.flwr.federations.local-simulation.options.backend.init-args]

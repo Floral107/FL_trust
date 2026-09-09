@@ -26,10 +26,15 @@ __pycache__/
 # Nothing in here is part of the pipeline; nothing in here may be re-run.
 archive/
 
-# paper assembly layer: gate, table/figure builders, MAIN.tex splicers.
-# Run from the repo ROOT, e.g. `python paper/sanity_gate.py` — the scripts use
-# cwd-relative data/ paths on purpose. See PIPELINE.md.
-paper/
+# paper/ IS shipped (gate, table/figure builders, thesis splicers) so the
+# commands in PIPELINE.md work on a fresh clone. Run them from the repo ROOT,
+# e.g. `python paper/sanity_gate.py` — the scripts use cwd-relative data/ paths
+# on purpose.
+paper/__pycache__/
+
+# internal working documents, not part of the release
+AUDIT.md
+REPO_MAP.md
 
 # raw per-seed result CSVs (already merged into data/combo/)
 /results_*.csv
@@ -64,5 +69,6 @@ MAIN.tex
 *.sh
 !run_et_experiments.sh
 
-# local-only notes & credentials
+# local-only scratch
+*.local
 vpn.txt
