@@ -102,8 +102,9 @@ not mistaken for accepted results. Some may require rephrasing in the thesis.
   ET-adv and all ADULT/IMDB ET arms are unaffected.
 - **Three ET-fair seeds are duplicated** between K=4 and K=20 (123, 2025, 9928):
   identical `acc`, `loss` and `res` to the last digit, with only the stochastic
-  metrics differing. Those two cells share a model. `set_num_cl.py` rewrites a
-  shared `pyproject.toml` in place, which races when cells run concurrently.
+  metrics differing. Those two cells share a model. A candidate mechanism, not
+  confirmed: `set_num_cl.py` rewrites a shared `pyproject.toml` in place, so
+  concurrent cells on one host can read each other's client count.
 - **Utilization-table rows are per-metric diagonals.** The `acc` row is the
   accuracy-weighted run; the `res` row is the resilience-weighted run. They are
   different models, so the accuracy figure is not the accuracy of the model in
