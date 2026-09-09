@@ -136,10 +136,10 @@ def _make_grayscale_subset(x, y, frac=0.05):
     x = x.copy()
     num_samples = x.shape[0]
 
-    # Biztons�g kedv��rt int32-re hozzuk a labelt
+    # defensively cast the labels to int32
     y = np.asarray(y, dtype=np.int32)
 
-    # Egyedi oszt�lyok (CIFAR-10-ben 0..9)
+    # unique classes (0..9 for CIFAR-10)
     classes = np.unique(y)
 
     for c in classes:
@@ -149,17 +149,17 @@ def _make_grayscale_subset(x, y, frac=0.05):
 
         k = int(np.round(len(idx) * frac))
         if k < 1:
-            k = 1  # legal�bb 1 legyen, ha van minta
+            k = 1  # at least 1 sample when the class is non-empty
 
         chosen = np.random.choice(idx, size=k, replace=False)
 
-        # Kiv�lasztott k�pek: (k, 32, 32, 3)
+        # selected images: (k, 32, 32, 3)
         imgs = x[chosen]  # float16 [0, 1]
 
-        # Grayscale: �tlag a 3 csatorna ment�n
+        # grayscale: mean across the 3 channels
         gray = imgs.mean(axis=-1, keepdims=True)  # (k, 32, 32, 1)
 
-        # Visszam�soljuk 3 csatorn�ra (R=G=B)
+        # copy back into 3 channels (R=G=B)
         x[chosen] = np.repeat(gray, 3, axis=-1)
 
     return x
@@ -187,7 +187,7 @@ def load_data(partition_id, num_partitions):
     partition.set_format("numpy")
     x, y = partition["img"], partition["label"]
 
-    # Normaliz�l�s [0,1] �s float16
+    # normalise to [0,1] and cast to float16
     x = (x / 255.0).astype(np.float16)
 
     # Split into train and test
@@ -201,11 +201,11 @@ def load_data(partition_id, num_partitions):
     x_train, y_train = x_train[:num_train_samples], y_train[:num_train_samples]
     x_test, y_test = x_test[:num_test_samples], y_test[:num_test_samples]
 
-    # >>> Itt alak�tjuk grayscale-l� a k�pek 5%-�t oszt�lyonk�nt <<<
+    # convert 5% of the images per class to grayscale
     x_train = _make_grayscale_subset(x_train, y_train, frac=0.05)
     x_test = _make_grayscale_subset(x_test, y_test, frac=0.05)
 
-    # Vissza: tensork�nt, ahogy eddig
+    # return as a tensor, as before
     return (
         tf.convert_to_tensor(x_train, dtype=tf.float32),
         tf.convert_to_tensor(y_train, dtype=tf.int32),

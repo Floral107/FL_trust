@@ -164,16 +164,16 @@ def calculate_pgd_text_robustness(
     PGD robustness for text models (IMDB), measured ONLY on correctly
     classified clean samples.
 
-    x_test: lista / tömb szövegek
-    y_test: címkék, itt int8-ként érkeznek (0/1 vagy több osztály),
-            ezeket int32-re castoljuk.
+    x_test: list/array of raw strings.
+    y_test: labels, arriving as int8 (binary or multi-class);
+                    cast to int32 here.
     """
 
     print("=== PGD TEXT DEBUG ===")
     print(f"epsilon = {epsilon:.6f}, alpha = {alpha:.6f}, num_iter = {num_iter}")
     print(f"num samples (len(x_test)) = {len(x_test)}")
 
-    # 1) Embed szöveg -> vektorok
+    # 1) embed text -> vectors
     from imdb.imdb.task import process_text
     embeddings = process_text(x_test)  # np.array
     print(f"embeddings type: {type(embeddings)}, shape: {getattr(embeddings, 'shape', None)}")
@@ -181,14 +181,14 @@ def calculate_pgd_text_robustness(
     embeddings = tf.convert_to_tensor(embeddings, dtype=tf.float32)
     print(f"embeddings TF shape: {embeddings.shape}, dtype: {embeddings.dtype}")
 
-    # 2) Label int8 -> int32 (SparseCategoricalCrossentropy ezt várja)
+    # 2) labels int8 -> int32 (required by SparseCategoricalCrossentropy)
     print(f"y_test raw dtype: {np.array(y_test).dtype}, first 10: {np.array(y_test)[:10]}")
     y_test = tf.convert_to_tensor(y_test, dtype=tf.int8)
     y_test = tf.cast(y_test, tf.int32)
     print(f"y_test TF dtype after cast: {y_test.dtype}")
     print(f"y_test unique labels (np): {np.unique(y_test.numpy())}")
 
-    # 3) Clean predikciók
+    # 3) clean predictions
     logits_clean = model(embeddings, training=False)
     preds_clean = tf.argmax(logits_clean, axis=1, output_type=tf.int32)
 
@@ -200,9 +200,9 @@ def calculate_pgd_text_robustness(
     clean_acc = total_correct_full / total_samples if total_samples > 0 else 0.0
     print(f"[CLEAN] total_samples = {total_samples}, total_correct = {total_correct_full}, clean_acc = {clean_acc:.4f}")
 
-    # Csak a clean-en helyes minták
+    # keep only the clean-correct samples
     correct_mask = correct_mask_full
-    idx = tf.where(correct_mask)[:, 0]   # indexek a helyes mintákhoz
+    idx = tf.where(correct_mask)[:, 0]   # indices of the clean-correct samples
     print(f"Number of correctly classified samples used for PGD: {idx.shape[0]}")
 
     embeddings_corr = tf.gather(embeddings, idx)
@@ -219,7 +219,7 @@ def calculate_pgd_text_robustness(
         print("[WARN] No correctly classified samples found; PGD robustness set to 0.0.")
         return 0.0
 
-    # 4) PGD csak a clean-helyes mintákon
+    # 4) PGD on the clean-correct samples only
     adv = tf.Variable(embeddings_corr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
@@ -242,7 +242,7 @@ def calculate_pgd_text_robustness(
         grad_max = tf.reduce_max(grad).numpy()
         print(f"[ITER {it}] loss = {loss.numpy():.6f}, grad range: min={grad_min:.6f}, max={grad_max:.6f}")
 
-        # L∞-lépés embedding-térben
+        # L-inf step in embedding space
         adv.assign_add(alpha * tf.sign(grad))
         perturb = adv - embeddings_corr
         pert_min = tf.reduce_min(perturb).numpy()
@@ -256,11 +256,11 @@ def calculate_pgd_text_robustness(
         pert_max = tf.reduce_max(perturb).numpy()
         print(f"[ITER {it}] AFTER  clip perturb range: min={pert_min:.6f}, max={pert_max:.6f}")
 
-    # 5) PGD utáni predikció
+    # 5) post-attack prediction
     logits_adv = model(adv, training=False)
     preds_adv = tf.argmax(logits_adv, axis=1, output_type=tf.int32)
 
-    # Robusztus pontosság az eredetileg helyeseken
+    # robust accuracy over the originally-correct samples
     still_correct = tf.equal(preds_adv, y_corr)
     num_still_correct = int(
         tf.reduce_sum(tf.cast(still_correct, tf.int32)).numpy()

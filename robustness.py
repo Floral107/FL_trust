@@ -96,7 +96,7 @@ def parse_arguments():
     parser.add_argument("--partition", type=str, required=True, choices=["iid", "noniid"])
     parser.add_argument("--num_rounds", type=int, required=True)
 
-    # (javított) seed: 1 seed vagy 'all'
+    # seed: a single seed, or 'all' for the full set
     parser.add_argument("--seed", type=str, required=True,
                         choices=["all", "42", "107", "123", "2025", "9928"])
 

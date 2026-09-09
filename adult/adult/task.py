@@ -68,7 +68,10 @@ def set_seed(seed: int):
 
 def calculate_p_keep(sigma: float, d: int, delta: float = 1e-5) -> float:
     """
-    Calculates the probability 'p' (p_keep) based on the formula provided in the image.
+    Retention probability p_keep for k-ary randomized response, calibrated so the
+    mechanism matches the (eps, delta)-DP guarantee of a Gaussian mechanism with
+    the given sigma. p = e^eps / (e^eps + d - 1) with
+    eps = 2*sqrt(ln(1.25/delta)) / sigma  (Dwork & Roth, 2014, Appendix A).
     
     Args:
         sigma: The Gaussian noise scale (standard deviation).
@@ -100,15 +103,16 @@ def apply_randomized_response(series: pd.Series, p_keep: float) -> pd.Series:
     out = values.copy()
 
     if flip_mask.any():
-        # kategória -> index
+        # category -> index
         cat_to_idx = {cat: i for i, cat in enumerate(categories)}
         idx_to_cat = np.array(categories)
 
         original_idx = np.array([cat_to_idx[v] for v in values[flip_mask]])
 
-        # sorsolás 0..d-2 közül
+        # draw uniformly from 0..d-2
         r = np.random.randint(0, d - 1, size=original_idx.shape[0])
-        # ha nagyobb vagy egyenlő az eredetivel, toljuk +1-gyel (így kihagyjuk az eredetit)
+        # shift by +1 when the draw is >= the original index, so the original
+        # category can never be redrawn
         r += (r >= original_idx).astype(int)
 
         new_vals = idx_to_cat[r]
@@ -187,7 +191,7 @@ def load_data(
     
     if "income" in categorical_cols:
         categorical_cols.remove("income")
-    if "income" in numerical_cols: # Biztonság kedvéért
+    if "income" in numerical_cols:  # defensive: income is the target, never a feature
         numerical_cols.remove("income")
 
 
@@ -199,14 +203,14 @@ def load_data(
         columns=encoder.get_feature_names_out(categorical_cols),
     )
     
-    # ===== OHE META =====
-    cat_sizes = [len(c) for c in encoder.categories_]   # pl. [8, 5, 14, ...]
+    # ===== one-hot encoding layout =====
+    cat_sizes = [len(c) for c in encoder.categories_]   # e.g. [8, 5, 14, ...]
     cat_slices = []
     start = 0
     for size in cat_sizes:
         cat_slices.append(slice(start, start + size))
         start += size
-    n_cat = start  # első n_cat oszlop: OHE
+    n_cat = start  # the first n_cat columns are the one-hot block
     # ====================
 
 

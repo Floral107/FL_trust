@@ -175,9 +175,9 @@ def calculate_tabular_robustness(
     delta: float = 1e-5,
 ):
     """
-    Robusztusság:
-      - OHE oszlopokon: randomized response (DP-kalibrált p_keep sigma alapján)
-      - numerikus oszlopokon: Gauss zaj N(0, sigma^2), 3*sigma-nál vágva
+    Reliability under a mixed noise model:
+      - one-hot columns: randomized response, p_keep calibrated from sigma
+      - numeric columns: Gaussian noise N(0, sigma^2), clipped at 3*sigma
     """
     import tensorflow as tf
     import numpy as np
@@ -188,7 +188,7 @@ def calculate_tabular_robustness(
     cat_slices = meta["cat_slices"]
     n_cat = meta["n_cat"]
 
-    # clean predikciók
+    # clean predictions
     data_tf = tf.convert_to_tensor(data, dtype=tf.float32)
     preds_clean = tf.round(model(data_tf, training=False))
     preds_clean = tf.reshape(preds_clean, [-1])
@@ -198,12 +198,12 @@ def calculate_tabular_robustness(
     for _ in range(L):
         X_noisy = data.copy()
 
-        # 1) OHE blokkok RR-rel
+        # 1) randomized response on the one-hot blocks
         for sl in cat_slices:
             block = X_noisy[:, sl]
             X_noisy[:, sl] = random_response_one_hot_block(block, sigma=sigma, delta=delta)
 
-        # 2) numerikus oszlopokra Gauss zaj (ha van ilyen)
+        # 2) Gaussian noise on the numeric columns, if any
         if n_cat < D:
             num_part = X_noisy[:, n_cat:]
             noise = np.random.normal(loc=0.0, scale=sigma, size=num_part.shape).astype(np.float32)
@@ -211,7 +211,7 @@ def calculate_tabular_robustness(
             num_part += noise
             X_noisy[:, n_cat:] = num_part
 
-        # 3) modell kiértékelés batch-ekben
+        # 3) batched model evaluation
         X_noisy_tf = tf.convert_to_tensor(X_noisy, dtype=tf.float32)
 
         preds_list = []
@@ -273,31 +273,31 @@ def add_noise(text, noise_level=0.1):
 
 def random_response_one_hot_block(block: np.ndarray, sigma: float, delta: float = 1e-5) -> np.ndarray:
     """
-    block: (N, d) OHE mátrix egy kategóriára.
-    sigma: Gauss szórás, amiből p_keep-et számolunk.
+    block: (N, d) one-hot matrix for a single categorical feature.
+    sigma: Gaussian standard deviation from which p_keep is derived.
     """
     n, d = block.shape
     p_keep = calculate_p_keep(sigma=sigma, d=d, delta=delta)
 
-    # eredeti kategória indexek
+    # original category indices
     y = block.argmax(axis=1)  # shape: (n,)
 
-    # eldöntjük, hol flipelünk
+    # decide which rows to flip
     u = np.random.rand(n)
     flip_mask = u > p_keep   # True = flip, False = marad
 
     out = block.copy()
 
     if flip_mask.any():
-        # kategória -> index
-        # (feltételezzük, hogy block korrekt OHE, így y 0..d-1 között van)
+        # category -> index
+        # (assumes block is a valid one-hot, so y lies in 0..d-1)
         y_flip = y[flip_mask]
 
-        # sorsolunk másik kategóriát (d-1 lehetőség)
+        # draw a different category (d-1 options)
         r = np.random.randint(0, d - 1, size=y_flip.shape[0])
         r += (r >= y_flip).astype(int)  # ha az eredetivel esne egybe, tolunk rajta 1-et
 
-        # nullázzuk a sort, és beállítjuk az új 1-est
+        # zero the row, then set the new hot index
         block_flipped = np.zeros_like(block[flip_mask], dtype=np.float32)
         block_flipped[np.arange(len(r)), r] = 1.0
 
@@ -307,7 +307,10 @@ def random_response_one_hot_block(block: np.ndarray, sigma: float, delta: float 
 
 def calculate_p_keep(sigma: float, d: int, delta: float = 1e-5) -> float:
     """
-    Calculates the probability 'p' (p_keep) based on the formula provided in the image.
+    Retention probability p_keep for k-ary randomized response, calibrated so the
+    mechanism matches the (eps, delta)-DP guarantee of a Gaussian mechanism with
+    the given sigma. p = e^eps / (e^eps + d - 1) with
+    eps = 2*sqrt(ln(1.25/delta)) / sigma  (Dwork & Roth, 2014, Appendix A).
     
     Args:
         sigma: The Gaussian noise scale (standard deviation).

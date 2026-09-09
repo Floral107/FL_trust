@@ -32,9 +32,12 @@ archive/
 # on purpose.
 paper/__pycache__/
 
-# internal working documents, not part of the release
+# internal working documents; the root README is the single doc
 AUDIT.md
 REPO_MAP.md
+PIPELINE.md
+data/README.md
+*/README.md
 
 # raw per-seed result CSVs (already merged into data/combo/)
 /results_*.csv

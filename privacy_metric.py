@@ -593,12 +593,12 @@ def _membership_scores(p: Any) -> Tuple[np.ndarray, np.ndarray]:
         if arr.shape[1] == 1:
             score = arr[:, 0].astype(np.float32)
         else:
-            # ha (N,2) akkor a member tipikusan az utolsó oszlop
+            # for (N,2) output the member class is conventionally the last column
             score = arr[:, -1].astype(np.float32)
         cls = (score >= 0.5).astype(int)
         return score, cls
 
-    # fallback: lapítsuk
+    # fallback: flatten
     flat = arr.reshape(-1).astype(np.float32)
     cls = (flat >= 0.5).astype(int)
     return flat, cls

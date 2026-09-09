@@ -147,13 +147,13 @@ def _make_grayscale_subset(x, y, frac=0.05):
 
         chosen = np.random.choice(idx, size=k, replace=False)
 
-        # Kiv�lasztott k�pek (k, 32, 32, 3)
+        # selected images (k, 32, 32, 3)
         imgs = x[chosen]
 
-        # Grayscale: �tlag a 3 csatorna ment�n
+        # grayscale: mean across the 3 channels
         gray = imgs.mean(axis=-1, keepdims=True)  # (k, 32, 32, 1)
 
-        # Vissza 3 csatorn�ra
+        # broadcast back to 3 channels
         x[chosen] = np.repeat(gray, 3, axis=-1)
 
     return x
@@ -175,10 +175,10 @@ def load_data(partition_id, num_partitions):
     partition.set_format("numpy")
     x, y = partition["img"], partition["label"]
 
-    # Normaliz�l�s
+    # normalisation
     x = (x / 255.0).astype(np.float16)
 
-    # Train�test split
+    # train/test split
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=0.2, random_state=42
     )
@@ -188,7 +188,7 @@ def load_data(partition_id, num_partitions):
     x_train, y_train = x_train[:num_train_samples], y_train[:num_train_samples]
     x_test, y_test = x_test[:num_test_samples], y_test[:num_test_samples]
 
-    # >>> Itt grayscale-elj�k az 5%-ot oszt�lyonk�nt <<<
+    # convert 5% of each class to grayscale (label-preserving corruption)
     x_train = _make_grayscale_subset(x_train, y_train, frac=0.05)
     x_test = _make_grayscale_subset(x_test, y_test, frac=0.05)
 
