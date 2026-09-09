@@ -1,0 +1,29 @@
+# Pinned to the versions the checkpoints in 420/ were written with.
+# TensorFlow 2.17 requires numpy<2.1 — installing a newer numpy breaks
+# `import tensorflow` with "initialization of _pywrap_checkpoint_reader
+# raised unreported exception". Keep these two together.
+numpy<2.1
+tensorflow>=2.11.1,<2.18.0
+keras>=3.0,<3.5
+
+# Federated learning. The <1.16 bound matches every app's pyproject.toml.
+flwr[simulation]>=1.15.0,<1.16.0
+flwr-datasets[vision]>=0.5.0
+ray
+
+# Data / models
+scikit-learn
+pandas
+scipy
+toml
+requests
+tqdm
+
+# IMDB text embedding (Universal Sentence Encoder)
+tensorflow-hub
+
+# Membership-inference attack (privacy_metric.py)
+adversarial-robustness-toolbox[tensorflow]
+
+# Figures (paper/_run_figs.py)
+matplotlib

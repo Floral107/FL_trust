@@ -1,0 +1,77 @@
+# envs & caches
+.venv/
+__pycache__/
+.pytest_cache/
+.hf_cache/
+.tfhub_cache/
+.partition_cache/
+.claude/
+.vscode/
+
+# heavy training artifacts & model checkpoints (tens of GB)
+420/
+420_et_adv/
+420_et_dp/
+420_et_fair/
+420_fedprox/
+420_st_*/
+420_dy_*/
+*.keras
+*.h5
+*.ckpt*
+
+# single quarantine for everything retired: box snapshots + per-host scripts,
+# one-off analyses, superseded builders, tarball pulls, data backups, old notes,
+# the short paper, and the standalone demo app (which lives in its own repo).
+# Nothing in here is part of the pipeline; nothing in here may be re-run.
+archive/
+
+# paper/ IS shipped (gate, table/figure builders, thesis splicers) so the
+# commands in PIPELINE.md work on a fresh clone. Run them from the repo ROOT,
+# e.g. `python paper/sanity_gate.py` — the scripts use cwd-relative data/ paths
+# on purpose.
+paper/__pycache__/
+
+# internal working documents; the root README is the single doc
+AUDIT.md
+REPO_MAP.md
+PIPELINE.md
+data/README.md
+*/README.md
+
+# raw per-seed result CSVs (already merged into data/combo/)
+/results_*.csv
+
+# generated table bodies (paper/ builders write these to the repo root, and the
+# paper/_splice_*.py scripts read them from there)
+/tab*.tex
+
+# generated figures (regenerate with paper/_run_figs.py; finals live in the article)
+figs/
+data/combo/plots/
+
+# tests & smokes, merge/collect utilities
+/test_*.py
+/smoke_*.py
+data/merge_collected.py
+data/combine_celeba_sources.py
+
+# data: durable CSV artifacts are tracked; backups/staging are not
+data/_*
+data/*.tgz
+
+# logs & backups
+logs/
+*.log
+*.bak*
+
+# paper sources (code release only)
+MAIN.tex
+
+# box-specific ops scripts (one-off fills, watchdogs, per-host launchers)
+*.sh
+!run_et_experiments.sh
+
+# local-only scratch
+*.local
+vpn.txt

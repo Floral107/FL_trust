@@ -1,0 +1,64 @@
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project]
+name = "adultnoniid"
+version = "1.0.0"
+description = ""
+license = "Apache-2.0"
+dependencies = [ "flwr[simulation]>=1.15.0,<1.16.0", "flwr-datasets[vision]>=0.5.0", "tensorflow>=2.11.1,<2.18.0",]
+
+[tool.flwr.app]
+publisher = "floral"
+
+[tool.flwr.federations]
+default = "local-simulation"
+
+[tool.flwr.app.components]
+serverapp = "adultnoniid.server_app:app"
+clientapp = "adultnoniid.client_app:app"
+
+[tool.flwr.app.config]
+num-server-rounds = 10
+local-epochs = 1
+batch-size = 32
+verbose = false
+strategy = "fedavg"
+proximal-mu = 0.0
+# Explicit Training (ET). et-mode in {"none", "fair", "adv", "dp"}.
+et-mode = "none"
+et-lambda-fair = 0.5
+et-adv-ratio = 0.5
+et-adv-eps = 0.3
+et-adv-alpha = 0.007
+et-adv-steps = 7
+et-dp-clip = 1.0
+et-dp-sigma = 1.0
+# Score-driven aggregation (ST/DY). weight-mode in {"none", "st", "dy"}.
+# weight-metric is the metric used to derive client weights (must be set for
+# st/dy): acc, loss, fairDP, fairEO, rel, res, priv.
+weight-mode = "none"
+weight-metric = ""
+# Shrinkage toward uniform for ST/DY weights: w <- (1-beta)+beta*w. beta=1 is
+# the legacy raw transform; beta=0 is plain FedAvg. <1 floors each weight at
+# (1-beta), making the aggregation collapse-proof. Replaces the do-no-harm guard.
+weight-beta = 1.0
+# Hard multiplicative cap on ST/DY weights (>=1, or 0 to disable). Clips each
+# weight to [1/cap, cap] after shrinkage, bounding the top client's share so a
+# near-one-hot GTG score cannot collapse the aggregation onto one client. cap=2
+# -> top client gets at most 2x uniform. Independent of K (unlike beta).
+weight-cap = 0.0
+
+[tool.flwr.federations.local-simulation.options]
+num-supernodes = 20
+
+[tool.hatch.build.targets.wheel]
+packages = [ ".",]
+
+[tool.flwr.federations.local-simulation.options.backend.client-resources]
+num-cpus = 1
+num-gpus = 0.0
+
+[tool.flwr.federations.local-simulation.options.backend.init-args]
+num-cpus = 16

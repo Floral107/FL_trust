@@ -1,0 +1,334 @@
+"""adult: A Flower / TensorFlow app."""
+
+
+import os
+#------------------------------------#
+def _require_seed() -> int:
+    """Read the mandatory `seed` env var.
+
+    Bare `int(os.environ.get("seed"))` raised
+    `TypeError: int() argument must be ... not 'NoneType'` at import time, inside
+    a Flower/Ray worker, where the traceback is buried in worker logs. Say what
+    is actually wrong instead.
+    """
+    raw = os.environ.get("seed")
+    if raw is None:
+        raise RuntimeError(
+            "environment variable 'seed' is not set. Every task.py reads it at "
+            "import time. Set it before launching: PowerShell `$env:seed = '42'`, "
+            "bash `export seed=42`. run_experiments.ps1 / run_et_experiments.sh "
+            "do this for you."
+        )
+    try:
+        return int(raw)
+    except ValueError as e:
+        raise RuntimeError(f"environment variable 'seed' must be an integer, got {raw!r}") from e
+
+
+SEED = _require_seed()
+#------------------------------------#
+
+import toml
+import sys
+
+from pathlib import Path
+BASE_DIR = Path(__file__).parent.parent  
+toml_file = BASE_DIR / "pyproject.toml"
+
+path_to_save = os.path.join(BASE_DIR.parent, "420" , "adult")
+
+
+import pandas as pd
+import numpy as np
+np.random.seed(SEED)
+import random
+random.seed(SEED)
+import tensorflow as tf
+# Allow multiple parallel Flower simulations to share the GPU instead of each
+# one claiming all VRAM at startup (prevents cudaSetDevice OOM errors).
+_gpus = tf.config.list_physical_devices("GPU")
+for _gpu in _gpus:
+    try:
+        tf.config.experimental.set_memory_growth(_gpu, True)
+    except RuntimeError:
+        pass
+from sklearn.datasets import fetch_openml
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from keras import layers, models, optimizers, regularizers
+tf.random.set_seed(SEED)
+tf.config.experimental.enable_op_determinism()
+import json
+
+
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+
+def calculate_p_keep(sigma: float, d: int, delta: float = 1e-5) -> float:
+    """
+    Retention probability p_keep for k-ary randomized response, calibrated so the
+    mechanism matches the (eps, delta)-DP guarantee of a Gaussian mechanism with
+    the given sigma. p = e^eps / (e^eps + d - 1) with
+    eps = 2*sqrt(ln(1.25/delta)) / sigma  (Dwork & Roth, 2014, Appendix A).
+    
+    Args:
+        sigma: The Gaussian noise scale (standard deviation).
+        d: The number of categories (dimension) for the specific feature.
+        delta: The privacy delta parameter (default 10^-5).
+        
+    Returns:
+        float: The probability of keeping the true category (p).
+    """
+    # Calculate the numerator term: exp( (2 * sqrt(ln(1.25/delta))) / sigma )
+    numerator_exponent = (2 * np.sqrt(np.log(1.25 / delta))) / sigma
+    term = np.exp(numerator_exponent)
+    
+    # Calculate p based on the image formula: term / (term + d - 1)
+    p = term / (term + d - 1)
+    return p
+
+def apply_randomized_response(series: pd.Series, p_keep: float) -> pd.Series:
+    categories = series.unique()
+    d = len(categories)
+    values = series.to_numpy()
+    n = len(values)
+
+    # random U(0,1)
+    u = np.random.rand(n)
+    keep_mask = u < p_keep
+    flip_mask = ~keep_mask
+
+    out = values.copy()
+
+    if flip_mask.any():
+        # category -> index
+        cat_to_idx = {cat: i for i, cat in enumerate(categories)}
+        idx_to_cat = np.array(categories)
+
+        original_idx = np.array([cat_to_idx[v] for v in values[flip_mask]])
+
+        # draw uniformly from 0..d-2
+        r = np.random.randint(0, d - 1, size=original_idx.shape[0])
+        # shift by +1 when the draw is >= the original index, so the original
+        # category can never be redrawn
+        r += (r >= original_idx).astype(int)
+
+        new_vals = idx_to_cat[r]
+        out[flip_mask] = new_vals
+
+    return pd.Series(out, index=series.index)
+
+
+def load_model(seed=SEED, input_shape=108, lr=1e-3, l2=1e-4, clipnorm=1.0):
+    # reproducibility
+    set_seed(seed)
+
+    initializer = tf.keras.initializers.HeNormal(seed=seed)
+
+    model = models.Sequential([
+        layers.Input(shape=(input_shape,), dtype='float32'),
+
+        # wider first layer (tabular data often benefits), LayerNormalization instead of BatchNorm
+        layers.Dense(256, activation='relu',
+                     kernel_regularizer=regularizers.l2(l2),
+                     kernel_initializer=initializer),
+        layers.LayerNormalization(),
+        layers.Dropout(0.1),  # smaller dropout
+
+        layers.Dense(128, activation='relu',
+                     kernel_regularizer=regularizers.l2(l2),
+                     kernel_initializer=initializer),
+        layers.LayerNormalization(),
+        layers.Dropout(0.05),
+
+        layers.Dense(64, activation='relu',
+                     kernel_regularizer=regularizers.l2(l2),
+                     kernel_initializer=initializer),
+        layers.LayerNormalization(),
+
+        layers.Dense(1, activation='sigmoid')
+    ])
+
+    opt = optimizers.Adam(learning_rate=lr, clipnorm=clipnorm)
+    model.compile(optimizer=opt,
+                  loss='binary_crossentropy',
+                  metrics=['accuracy'])
+    return model
+
+fds = None  # Cache FederatedDataset
+
+#Partition has already been saved, can be loaded, otherwise it will be created
+
+def load_data(
+    partition_id: int,
+    num_partitions: int,
+    return_sensitive: bool = False,
+    sensitive_attr: str = "sex",
+    sigma: float = None, # <--- NEW ARGUMENT for Gaussian Noise Scale
+    return_meta: bool = False
+):
+    np.random.seed(SEED)
+
+    # 1. Fetch dataset
+    dataset = fetch_openml(data_id=1590, as_frame=True)
+    df = dataset.data.copy()
+    df["income"] = dataset.target
+
+    # 2. Build sensitive attribute S from raw columns
+    if sensitive_attr == "sex":
+        s = (df["sex"].str.strip() == "Female").astype(np.int32)
+    elif sensitive_attr == "race":
+        s = (df["race"].str.strip() == "White").astype(np.int32)
+    else:
+        raise ValueError(f"Unsupported sensitive_attr={sensitive_attr}")
+
+    # 3. Prepare features
+    categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    numerical_cols   = df.select_dtypes(include=np.number).columns.tolist()
+    
+    
+    if "income" in categorical_cols:
+        categorical_cols.remove("income")
+    if "income" in numerical_cols:  # defensive: income is the target, never a feature
+        numerical_cols.remove("income")
+
+
+    encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    scaler  = StandardScaler()
+
+    df_encoded = pd.DataFrame(
+        encoder.fit_transform(df[categorical_cols]),
+        columns=encoder.get_feature_names_out(categorical_cols),
+    )
+    
+    # ===== one-hot encoding layout =====
+    cat_sizes = [len(c) for c in encoder.categories_]   # e.g. [8, 5, 14, ...]
+    cat_slices = []
+    start = 0
+    for size in cat_sizes:
+        cat_slices.append(slice(start, start + size))
+        start += size
+    n_cat = start  # the first n_cat columns are the one-hot block
+    # ====================
+
+
+    df_scaled = pd.DataFrame(
+        scaler.fit_transform(df[numerical_cols]),
+        columns=numerical_cols,
+    )
+
+    # 4. Combine features + labels + sensitive
+    df_processed = pd.concat([df_encoded, df_scaled], axis=1).astype(np.float32)
+    df_processed["income"]    = (df["income"].str.strip() == ">50K").astype(np.float32)
+    df_processed["sensitive"] = s.astype(np.float32)
+
+    # 5. Shuffle once
+    df_processed = df_processed.sample(frac=1, random_state=SEED).reset_index(drop=True)
+
+    # 6. Partition
+    partition_size = len(df_processed) // num_partitions
+    partition = df_processed.iloc[partition_id*partition_size : (partition_id+1)*partition_size]
+    
+    # 7. Train–test split
+    train, test = train_test_split(partition, test_size=0.2, random_state=42)
+
+    feature_cols = [c for c in df_processed.columns if c not in ["income", "sensitive"]]
+
+    X_train = train[feature_cols].values.astype(np.float32)
+    y_train = train["income"].values.astype(np.float32)
+    X_test  = test[feature_cols].values.astype(np.float32)
+    y_test  = test["income"].values.astype(np.float32)
+
+    s_train = train["sensitive"].values.astype(np.int32)
+    s_test  = test["sensitive"].values.astype(np.int32)
+    
+    meta = {"cat_slices": cat_slices, "n_cat": n_cat}
+
+    if return_sensitive and return_meta:
+        return X_train, y_train, X_test, y_test, s_train, s_test, meta
+    elif return_sensitive: 
+        print(s_test[:10])
+        return X_train, y_train, X_test, y_test, s_train, s_test
+    elif return_meta:
+        return X_train, y_train, X_test, y_test, meta
+    else:
+        return X_train, y_train, X_test, y_test
+
+
+def get_num_clients():
+    # Load the pyproject.toml file
+    config = toml.load(toml_file)
+
+    # Extracting values
+    num_clients = config["tool"]["flwr"]["federations"]["local-simulation"]["options"]["num-supernodes"]
+    return num_clients
+# NOTE: the dead module-level `config = toml.load(...)` and `set_num_clients()`
+# that used to sit here were removed 2026-09-01. set_num_clients() rewrote
+# pyproject.toml with toml.dump(), which quotes hyphenated keys and restructures
+# table headers -- both break Flower's config reader. It had no callers; the real
+# patcher is set_num_cl.py at the repo root, which does targeted regex edits.
+
+def _resolve_save_dir(strategy: str = "fedavg") -> str:
+    """FedAvg saves to 420/<dataset>/..., FedProx to 420_fedprox/<dataset>/..."""
+    s = (strategy or "fedavg").lower()
+    if s == "fedavg":
+        return path_to_save
+    return os.path.join(str(BASE_DIR.parent), f"420_{s}", os.path.basename(path_to_save))
+
+
+def train_with_proximal(model, x, y, mu, epochs, batch_size, verbose=0, shuffle=False):
+    """FedProx local training: task_loss + (mu/2) * sum ||w - w_global||^2.
+    Call AFTER model.set_weights(global_parameters)."""
+    global_trainables = [tf.constant(v.numpy()) for v in model.trainable_weights]
+    if len(model.output_shape) >= 2 and model.output_shape[-1] == 1:
+        y = tf.cast(tf.reshape(y, (-1, 1)), tf.float32)
+    loss_fn = tf.keras.losses.get(model.loss)
+    optimizer = model.optimizer
+
+    n = int(len(x))
+    steps = max(1, int(np.ceil(n / batch_size)))
+    for epoch in range(epochs):
+        if shuffle:
+            perm = tf.random.shuffle(tf.range(n))
+            x_ep, y_ep = tf.gather(x, perm), tf.gather(y, perm)
+        else:
+            x_ep, y_ep = x, y
+        epoch_loss = 0.0
+        for step in range(steps):
+            start = step * batch_size
+            end = min(start + batch_size, n)
+            x_batch, y_batch = x_ep[start:end], y_ep[start:end]
+            with tf.GradientTape() as tape:
+                preds = model(x_batch, training=True)
+                task_loss = tf.reduce_mean(loss_fn(y_batch, preds))
+                prox_term = tf.add_n([
+                    tf.reduce_sum(tf.square(w - w_g))
+                    for w, w_g in zip(model.trainable_weights, global_trainables)
+                ])
+                loss = task_loss + (mu / 2.0) * prox_term
+            grads = tape.gradient(loss, model.trainable_weights)
+            optimizer.apply_gradients(zip(grads, model.trainable_weights))
+            epoch_loss += float(loss.numpy())
+        if verbose:
+            print(f"[FedProx] Epoch {epoch+1}/{epochs} - loss={epoch_loss/steps:.4f}")
+
+
+def save_client(model, client_num, partition_id, round_num, strategy="fedavg"):
+    """Save the model of a client after training."""
+    model_dir = os.path.join(_resolve_save_dir(strategy), str(client_num), str(SEED))
+    model_path = os.path.join(model_dir, f"client_{partition_id}_round_{round_num}.keras")
+    model.save(model_path)
+
+
+def save_global_model(model, client_num, round_num, strategy="fedavg"):
+    """Save the global model after training."""
+    model_dir = os.path.join(_resolve_save_dir(strategy), str(client_num), str(SEED))
+    if round_num == 0:
+        os.makedirs(model_dir, exist_ok=True)
+        path = os.path.join(model_dir, "global_model_round_0.keras")
+        model.save(path)
+    else:
+        model_path = os.path.join(model_dir, f"global_model_round_{round_num}.keras")
+        model.save(model_path)
