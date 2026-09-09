@@ -1,0 +1,264 @@
+
+\selecthungarian
+
+%----------------------------------------------------------------------------
+% Abstract in Hungarian
+%----------------------------------------------------------------------------
+\chapter*{Melléklet}\addcontentsline{toc}{chapter}{Melléklet}
+\label{chap: melléklet}
+
+% ===== 4 metrika átlagos boxplotok 20 kliens =====
+\begin{figure}[H]
+    \centering 
+    \vfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{LOO - IID}
+    \end{minipage}
+    \vfill
+    % --- 1. SOR: IID, 4 Kliens (Balról jobbra: ADULT, CIFAR, IMDB) ---
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/adult_rob_adv_fair_acc_IID_20clients_l1o.png}
+        %\caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/cifar_rob_adv_fair_acc_IID_20clients_l1o.png}
+        %\caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/imdb_rob_adv_acc_IID_20clients_l1o.png}
+        %\caption{LOO}
+    \end{subfigure}
+    \vfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{GTG - IID}
+    \end{minipage}
+    \vfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/adult_rob_adv_fair_acc_IID_20clients_gtg.png}
+        %\caption{GTG}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/cifar_rob_adv_fair_acc_IID_20clients_gtg.png}
+        %\caption{GTG}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/imdb_rob_adv_acc_IID_20clients_gtg.png}
+        %\caption{GTG}
+    \end{subfigure}
+    \vfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{LOO - Non-IID}
+    \end{minipage}
+    \vfill
+    % --- 1. SOR: IID, 4 Kliens (Balról jobbra: ADULT, CIFAR, IMDB) ---
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/adult_rob_adv_fair_acc_Non-IID_20clients_l1o.png}
+        %\caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/cifar_rob_adv_fair_acc_Non-IID_20clients_l1o.png}
+        %\caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/imdb_rob_adv_acc_Non-IID_20clients_l1o.png}
+        %\caption{LOO}
+    \end{subfigure}
+    \vfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{GTG - Non-IID}
+    \end{minipage}
+    \vfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/adult_rob_adv_fair_acc_Non-IID_20clients_gtg.png}
+        %\caption{GTG}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/cifar_rob_adv_fair_acc_Non-IID_20clients_gtg.png}
+        %\caption{GTG}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{szakdoga/figs/imdb_rob_adv_acc_Non-IID_20clients_gtg.png}
+        %\caption{GTG}
+    \end{subfigure}
+
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{ADULT}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{CIFAR}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{IMDB}
+    \end{minipage}
+
+    \includegraphics[width=0.5\linewidth]{szakdoga/figs/gtg_boxplot_legend.png}
+
+    \caption{A kliensek átlagos hozzájárulásai.}
+    \label{fig:all_iid_rob_fair_adv_20}
+\end{figure}
+
+
+
+% ===== 20 Kliens IID - Körök (ADULT, CIFAR, IMDB) =====
+\begin{figure}[H]
+    \centering
+    
+    % --- 1. SOR: ADULT ---
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{ADULT}
+        \end{minipage}
+        \vfill
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//adult_box_20clients_l1o.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//adult_box_20clients_gtg.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{CIFAR}
+        \end{minipage}
+        \vfill
+    % --- 2. SOR: CIFAR (Eredeti) ---
+
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//cifar_box_20clients_l1o.png}
+            % Nincs caption, a kérés szerint
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//cifar_box_20clients_gtg.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{IMDB}
+        \end{minipage}
+        \vfill
+    % --- 3. SOR: IMDB ---
+
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//imdb_box_20clients_l1o.png}
+            \caption{LOO} % Kérés szerint csak itt van caption
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//imdb_box_20clients_gtg.png}
+            \caption{GTG} % Kérés szerint csak itt van caption
+    \end{subfigure}
+
+
+    \caption{20 kliens megbízhatósági hozzájárulása 10 körön keresztül. 
+    Sorok (fentről le): ADULT, CIFAR-10, IMDB. 
+    IID felosztásban.}
+    \label{fig:all_datasets_box_20_iid}
+\end{figure}
+
+
+% ===== 20 Kliens Non-IID - Körök (ADULT, CIFAR, IMDB) =====
+\begin{figure}[H]
+    \centering
+    
+    % --- 1. SOR: ADULT ---
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{ADULT}
+        \end{minipage}
+        \vfill
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//adultnoniid_box_20clients_l1o.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//adultnoniid_box_20clients_gtg.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{CIFAR}
+        \end{minipage}
+        \vfill
+    % --- 2. SOR: CIFAR (Eredeti) ---
+
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//cifarnoniid_box_20clients_l1o.png}
+            % Nincs caption, a kérés szerint
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//cifarnoniid_box_20clients_gtg.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{IMDB}
+        \end{minipage}
+        \vfill
+    % --- 3. SOR: IMDB ---
+
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//imdbnoniid_box_20clients_l1o.png}
+            \caption{LOO} % Kérés szerint csak itt van caption
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{figs//imdbnoniid_box_20clients_gtg.png}
+            \caption{GTG} % Kérés szerint csak itt van caption
+    \end{subfigure}
+
+
+    \caption{20 kliens megbízhatósági hozzájárulása 10 körön keresztül. 
+    Sorok (fentről le): ADULT, CIFAR-10, IMDB. 
+    Non-IID felosztásban.}
+    \label{fig:all_datasets_box_20_Non-IID}
+\end{figure}
+
+

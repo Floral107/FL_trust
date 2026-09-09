@@ -1,0 +1,39 @@
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\selecthungarian
+
+%----------------------------------------------------------------------------
+% Abstract in Hungarian
+%----------------------------------------------------------------------------
+\chapter*{Kivonat}\addcontentsline{toc}{chapter}{Kivonat}
+
+A dolgozat a federált tanulásban használt globális modellek robusztusságának vizsgálatára fókuszál, különösen arra, hogy az egyes kliensek milyen mértékben járulnak hozzá a modell ellenállóképességéhez. A meglévő irodalom elsősorban a teljesítménymutatókat helyezi előtérbe, míg mi azt kutatjuk, hogy mely adatforrások erősítik a modell stabilitását a természetesen előforduló zajjal szemben. Ennek érdekében egy új robusztusságmetrikát vezetünk be, amely a Gaussian típusú zaj hatására bekövetkező teljesítményváltozást méri.
+
+A kliensek hozzájárulásának számszerűsítésére a Shapley-érték két különböző approximációját alkalmazzuk: egy gyors, lineáris megoldást, valamint egy korszerű, state-of-the-art megközelítést.
+
+Eredményeink rávilágítanak, hogy a robusztusság szempontjából kulcsfontosságú kliensek nem feltétlenül azok, amelyek leginkább javítják a modell pontosságát. Ez megerősíti, hogy a robusztussági hozzájárulás önálló és nélkülözhetetlen dimenzió a federált tanulási rendszerek megbízhatóságának és biztonságának értékelésében. 
+
+
+\vfill
+\selectenglish
+
+
+%----------------------------------------------------------------------------
+% Abstract in English
+%----------------------------------------------------------------------------
+\chapter*{Abstract}\addcontentsline{toc}{chapter}{Abstract}
+
+This thesis focuses on investigating the robustness of global models used in federated learning, with particular emphasis on the extent to which individual clients contribute to the model’s resilience. While the existing literature predominantly prioritizes performance metrics, we explore which data sources strengthen model stability against naturally occurring noise. To this end, we introduce a novel robustness metric that measures performance variation under Gaussian noise.
+
+To quantify client contributions, we apply two different approximations of the Shapley value: a fast, linear solution and a state-of-the-art approach.
+
+Our results highlight that the clients most critical to robustness are not necessarily those that improve model accuracy the most. This confirms that robustness contribution is an independent and indispensable dimension in evaluating the reliability and security of federated learning systems.
+
+
+\vfill
+\selectthesislanguage
+
+\newcounter{romanPage}
+\setcounter{romanPage}{\value{page}}
+\stepcounter{romanPage}

@@ -1,0 +1,379 @@
+\documentclass[sigconf]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{acmlicensed}
+\copyrightyear{2026}
+\acmYear{2026}
+\acmDOI{XXXXXXX.XXXXXXX}
+
+\acmConference[FedKDD/FedMAS '26]{The 2026 International Joint Workshop on Federated Learning for Multi-agent Systems and Data Mining}{August 9, 2026}{Jeju, Korea}
+
+\acmBooktitle{Proceedings of the 2026 International Joint Workshop on Federated Learning for Multi-agent Systems and Data Mining (FedKDD/FedMAS '26), August 9, 2026, Jeju, Korea}
+
+\acmDOI{XXXXXXX.XXXXXXX}
+\acmISBN{978-1-4503-XXXX-X/26/08}
+
+\let\Bbbk\relax
+\usepackage{mathtools,siunitx,booktabs,tikz,multirow,soul,comment,hyperref,amsbsy,amssymb,amsthm,amsfonts,bbm,textcomp,graphicx,wrapfig,float,subcaption,algorithm,algpseudocode,natbib,pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{fillbetween}
+
+\let\theorem\relax
+\let\definition\relax
+\let\lemma\relax
+\let\example\relax
+\let\corollary\relax
+
+\bibliographystyle{plainnat}
+    \renewcommand{\bibsection}{\subsubsection*{References}}
+
+\newtheorem{example}{Example}
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+
+\begin{document}
+
+\title{Trustworthiness Scores in Federated Learning}
+
+ \author{Zsuzsanna Flora Ulrich}
+ \affiliation{%
+ 	\institution{Department of Networked Systems and Services, Budapest University of Technology and Economics}
+ 	\city{Budapest}
+ 	\country{Hungary}}
+ \email{ulrichf@edu.bme.hu}
+
+ \author{Balazs Pejo}
+ \affiliation{%
+   \institution{CrySyS Lab \\ HUN-REN Hungarian Research Network}
+   \city{Budapest}
+   \country{Hungary}}
+ \email{pejo@crysys.hu}
+
+\begin{abstract}
+Federated learning offers a privacy-friendly collaborative learning framework, yet its success, like any joint venture, hinges on the contributions of its participants. Existing client evaluation methods predominantly focus on model performance, which represents only one dimension of a machine learning model's overall utility. In contrast, this work investigates the critical, yet overlooked, issue of client contributions towards a model's trustworthiness --- specifically, its robustness and fairness. To quantify these multifaceted contributions, we employ the state-of-the-art approximation of the Shapley value. Our results reveal that no single client excels across all dimensions. Instead, we uncover severe trade-offs between a model's performance and its trustworthiness, particularly under realistic data heterogeneity. This highlights a critical flaw in current evaluation schemes: optimizing and rewarding clients solely based on accuracy often inadvertently degrades model fairness or robustness, demanding a multidimensional approach for equitable evaluation.
+\end{abstract}
+
+\keywords{Federated Learning, Contribution Evaluation, Trustworthiness, Fairness, Robustness}
+
+\maketitle
+
+\section{Introduction}
+
+Digital technology has enabled the collection of vast amounts of user data, fueling the rapid advancement of Machine Learning. However, this data is often fragmented into isolated silos, limiting the full potential of ML to entities with access to large, centralized datasets and potentially leading to biased or suboptimal models. To address this challenge and democratize AI, Federated Learning (FL)~\cite{mcmahan2017communication} has emerged as a powerful paradigm. It enables multiple parties to collaboratively train a shared model without exposing their raw data. However, managing this collaborative process requires mechanisms to ensure its stability and success. An appropriate mechanism for this is data and client evaluation, which is foundational to building a trustworthy system.
+
+Indeed, data (client) evaluation intersects with several dimensions of trustworthiness; for instance, quantifying clients is essential for ensuring accountability and transparency in the federation~\cite{siomos2023contribution}. Client data directly impacts model's fairness~\cite{mehrabi2021survey}, and robustness~\cite{goldblum2022dataset,ibitoye2019threat}. These dimensions are often intertwined, creating a complex web of trade-offs~\cite{liu2020privacy, shaham2023holistic, li2024triangular}. 
+
+\begin{itemize}
+    \item \textbf{Fairness}: Ensuring the model avoids discrimination against groups based on sensitive attributes.
+    \item \textbf{Robustness}: Ensuring the model is reliable and resilient, i.e., it performs consistently when faced with corrupted data and its performance is maintained when subjected to adversarial attacks, respectively.
+\end{itemize}
+
+From a regulatory and governance perspective, our focus is aligned with the European Trustworthy AI framework~\cite{kaur2022trustworthy} and the European Union's Artificial Intelligence Regulation (AI Act), which emphasize that AI systems must be simultaneously ethically acceptable and technically robust. 
+
+Despite the importance of these multifaceted goals, the critical flaw of all existing evaluation methods is that they almost exclusively rely on a single performance metric, typically accuracy or model loss~\cite{naidu2023review}. This creates a narrow, and potentially misleading, view of a client's true value. This paper challenges this performance-centric paradigm, arguing that a client's contribution to model trustworthiness is an equally, if not more, important consideration.
+
+\paragraph{Contributions. }
+
+We conduct a multifaceted analysis of client contributions in FL, extending the evaluation to key trustworthiness metrics. Our primary contributions are below.
+
+\begin{itemize}
+    \item We evaluate the contribution of FL clients based on three distinct aspects of the global model: performance (measured by accuracy), fairness (measured by demographic parity), and robustness (captured by both reliability (tolerance to noise) and resilience (resistance against adversarial examples)).
+    \item We shed light on the critical trade-offs among these trustworthy AI pillars: the various scores allocated to the same clients frequently exhibit strong negative correlations, demonstrating that a client enhancing accuracy might simultaneously degrade fairness or robustness.
+    \item We apply two distinct and well-established contribution evaluation schemes (Leave-One-Out and Guided-Truncated-Gradient Shapley) and conduct a systematic empirical study on both tabular data and computer vision.
+\end{itemize}
+
+Our core finding is that client rankings differ dramatically across trustworthy pillars. This demonstrates that a performance-wise evaluation paints a skewed and incomplete picture.
+
+\section{Related Works}
+\label{sec:RW}
+
+\subsection{Trustworthy AI}
+
+\paragraph{Fairness. }
+
+Machine learning models, despite their mathematical objectivity, are trained on data generated by a society with historical and systemic biases~\cite{mehrabi2021survey}. Mitigating this is not only an ethical imperative but also an emerging legal requirement~\cite{wachter2020bias}. The concept of fairness is operationalized through various quantitative metrics, each capturing a different notion of equity. In this work, we focus on a well-established group fairness criteria: Demographic Parity~\cite{calders2009building}.
+
+\paragraph{Robustness. }
+
+While often discussed together, reliability and resilience are distinct parts of robustness within Trustworthy AI that address different types of data perturbations~\cite{fawzi2016robustness}. Reliability concerns a model's ability to perform consistently when faced with naturally occurring, random noise or data corruption~\cite{shannon1948}. Resilience, in contrast, measures a model's tolerance against deliberately crafted, worst-case perturbations, commonly known as adversarial examples~\cite{goodfellow2014explaining}. These attacks introduce small, often imperceptible changes to an input with the specific goal of deceiving the model and causing misclassifications. In this work, we use the well-known method called Projected Gradient Descent~\cite{madry2017towards} to generate such samples.
+
+Unfortunately most robustness metrics are confounded by the model's (baseline) accuracy. A model with higher general performance will almost always score better on corrupted or adversarial data, making it difficult to discern whether the model is truly more reliable or simply more accurate to begin with. This effect makes it challenging to evaluate a client's specific contribution to the model's reliability or resilience, separate from their contribution to its overall performance. To address this gap, our work explicitly treats reliability and resilience as separate objectives. We seek to evaluate them using methods that isolate these properties from the model's general predictive accuracy. This approach allows for a more direct and nuanced assessment of a client's contribution to protecting the model against either naturally occurring random noise or specific adversarial threats.
+
+\subsection{Contribution Evaluation}
+
+Evaluating the contribution of individual clients to a collaborative model is a critical task. While a handful of strategies exist to tackle this, the cornerstone technique for most quality assessment problems within FL~\cite{jain2020overview} is the Shapley Value (SV)~\cite{winter2002shapley,rozemberczki2022shapley}. While it possesses desirable axiomatic properties that guarantee a fair and unique distribution, its primary drawback is its computational complexity, which makes exact computation infeasible for typical FL scenarios. Consequently, a variety of approximation methods have been developed.
+
+\paragraph{Fairness. }
+
+The term "fairness" carries a dual meaning in this context, referring to both the properties of the reward allocation scheme (game-theoretic fairness~\cite{rabin1993incorporating}) and the statistical properties of the machine learning model (algorithmic fairness~\cite{kleinberg2018algorithmic}). Since the quality of data and clients has long been understood to extend beyond simple accuracy~\cite{wang1996beyond}, this second interpretation is our focus. 
+
+\paragraph{Robustness. }
+
+The relationship between contribution evaluation and model robustness is also bidirectional. On one hand, research has explored how the evaluation process itself can be vulnerable. For example,the authors in~\cite{xu2024ace,pejo2025fragility} have demonstrated that contribution scores can be manipulated through data poisoning attacks, highlighting a lack of resilience in the evaluation schemes themselves. On the other hand, a perpendicular line of work uses contribution evaluation as a tool to enhance the final model's resilience, for instance, by identifying and up-weighting clients who contribute positively to this objective~\cite{guan2022few,otmani2024fedsv}.
+
+Beyond adversarial manipulations, the inherent reliability of contribution scores is also a significant concern. The scores are often subject to uncertainty stemming from the stochastic nature of both the approximation algorithms and the model training process. This instability has been studied from several angles~\cite{pejo2025fragility,goldwasser2024stabilizing,wang2023data,qi2024mechanism}. While the existing literature has focused on the reliability and resilience of the evaluation schemes, our work addresses a different question. We shift the focus to using these schemes to evaluate clients based on their contribution to the model's reliability and resilience, treating these as explicit objectives alongside performance and fairness.
+
+\section{Trustworthiness Scores}
+\label{sec:mod}
+
+\paragraph{Notation. }
+
+The objective of ML is to iteratively (i.e., $1\leq t \leq T$) train a model $M(\theta)^t$ with parameters $\theta=\{\theta_1,\dots,\theta_m\}$ and with empirical loss function $\mathcal{L}(x,\theta)$ (where $x$ is a sample) such that the prediction is enhanced with respect to a specific task. During training the empirical loss is minimized: $\min_\theta \sum_{x\in D}\mathcal{L}(x,\theta)$. A summary of the utilized symbols are presented in Table~\ref{tab:notations}, which also contains the variables specific to the proposed evaluation schemes.
+
+\begin{table}[!b]
+    \centering
+    \begin{tabular}{c|l}
+        Symbol & Description \\
+        \hline
+        $k\in[K]$ & FL clients \\
+        $M_k^t$ \& $M^t$ & The local and global models after round $t$ \\
+        $D_k$ \& $D^\prime$ & Training \& Testing datasets \\
+        $x$ \& $y$ & Data sample \& label \\
+        $n$ \& $a$ & Gaussian \& malicious noise \\
+        $v(\cdot)$ & Evaluation function for scoring \\
+        & $v \in \{\text{perf}, \text{fair}, \text{rel}, \text{res}\}$ \\
+        $\mathtt{CS}^t_v$ & Contribution score in round $t$ based on $v$ \\
+        & $\mathtt{CS}^t_v\in\{\mathtt{GTG}^t_v$ \& $\mathtt{LOO}^t_v\}$ \\
+    \end{tabular}
+    \caption{Notations use in the paper.}
+    \label{tab:notations}
+\end{table}
+
+\begin{figure}[!h]
+	\centering
+	\includegraphics[width=\linewidth]{figs/short/GeminiExcelShort.png}
+	\caption{Example to illustrate what the different trustworthiness scores capture based on $D^\prime=\{(1,G),(2,R),(3,G),(4,R),(5,R),(6,G)\}$. While the model is $0.67$ accurate, its trustworthiness scores are widely different, e.g., $\mathtt{fair}(M)=0.33$ when Demographic Parity is used where the square numbers (1,2,4) are protected and 'Red' is the target class. Regarding reliability, the model might misclassify three (1,3,4) samples with various probabilities, resulting in $\mathtt{rel}(M)=0.09$ overall chance. Regarding resilience, the attacker is successful once (1) out of the four (1,2,5,6) correctly classified samples, i.e., $\mathtt{res}(M)=0.25$. Note, in the paper we transform these trustworthy metrics (i.e., $m\rightarrow(1-m)$) to be similar to accuracy: higher values mean better model. }
+	\label{fig:illustrate}
+\end{figure}
+
+\paragraph{Contribution Evaluation. }
+
+A visual illustration what our scores capture is presented in Figure~\ref{fig:illustrate}. Before defining our trustworthiness scores, we first outline the classical approach to client evaluation, which is based on model performance. The gold standard for this task is the Shapley Value: for a set of $K$ clients, the $\mathtt{SV}$ for client $k$ is defined in Eq.~\eqref{eq:GTG}, where $\Pi(K)$ is the set of all permutations of the $K$ clients, and $\pi_{<k}$ denotes the set of clients preceding $k$ in a given permutation $\pi$. Indeed, for performance-wise evaluation, $v(\cdot)$ is usually defined as the accuracy. As calculating the exact value requires exponentially many model trainings (one for each possible client combination), we use an approximation. 
+
+\begin{equation}
+    \label{eq:GTG}
+    \mathtt{SV}_v(k) = \frac{1}{K!} \sum_{\pi \in \Pi(K)} \left( v(\pi_{<k} \cup \{k\}) - v(\pi_{<k}) \right)
+\end{equation}
+
+Guided-Truncated-Gradient Shapley ($\mathtt{GTG}$)~\cite{liu2022gtg} requires only a single model to be trained and evaluating the coalitions within each round with some optimizations: 1) skipping entire rounds of FL if the global model's improvement is negligible ($<\epsilon_1$), 2) it samples a portion ($\epsilon_2$) of all subset from all possible client permutations (such that each client is equal times in the early places), and 3) for each sampled permutation, it only evaluates the marginal contributions of a client if they exceed a minimum threshold ($>\epsilon_3$). 
+
+Another, even more lightweight and widely used alternative approach what we also utilize in this paper is the Leave-One-Out ($\mathtt{LOO}$) heuristic~\cite{evgeniou2004leave}. A client's contribution is simply the change in utility observed when they are removed from the grand coalition: $\mathtt{LOO}_v(k) = v([K]) - v([K]\setminus\{k\})$.
+
+\paragraph{Performance Scoring. }
+
+Without a single exception, $v(\cdot)$ in the literature is always defined by some standard ML metric measuring the performance of the model, i.e., the accuracy/loss. We will use the former as the baseline: $ \mathtt{perf}(M)=\Pr_{x\in D^\prime}[M(x) = y]$. 
+
+\paragraph{Fairness Scoring. }
+
+Our fairness-related evaluation is based on Demographic Parity~\cite{calders2009building}, a group fairness metric relying on the test dataset. It requires that the subjects in the protected $S\subset D^\prime$ and unprotected $D^\prime \setminus S$ groups should have an equal probability of being assigned to the a particular ($\hat{y}$) predicted class. We assign the fairness score to model $M$ by taking the difference between these quantities: $\mathtt{fair}(M)=1-$\\
+$\left|\Pr_{x\in D^\prime}[M(x)=\hat{y} | x\in S] -\Pr_{x\in D^\prime}[M(x)=\hat{y} | x\in D^\prime \setminus S]\right|$.
+
+\paragraph{Reliability Scoring. }
+
+To measure reliability, we assess the stability of a model's predictions when subjected to naturally occurring, random noise. To simulate this, we perturb each test sample $x\in D^\prime$ with noise drawn from a Gaussian distribution, $n\sim \mathcal{N}(0,\sigma)$, and compare the prediction between the original and the perturbed input: \\
+$\mathtt{rel}(M)=1 - \Pr_{x\in D^\prime}[M(x) \neq M(x+n)|n\sim\mathcal{N}(0,\sigma)]$.
+
+\paragraph{Resilience Scoring. }
+
+In contrast to reliability, which measures stability against random noise, our resilience metric quantifies a model's resilience against a deliberate, worst-case adversarial attack. To evaluate this, we adopt a standard methodology from the adversarial machine learning literature. We subject a trained model to a powerful and widely recognized attack, Projected Gradient Descent (PGD)~\cite{madry2017towards}, which is designed to find the minimal perturbation necessary to induce a misclassifications. The resilience score is then defined based on the success rate of this attack on correctly classified samples: \\
+$\mathtt{res}(M)=1-\Pr_{(x,y) \in D'}[M(x) \neq M(x+a)|M(x)=y]$.
+
+\section{Experiments}
+\label{sec:exp}
+
+\paragraph{Setup. }
+
+To ensure our findings are generalizable, we conduct experiments across two settings: using CelebA with a CNN model for Computer Vision and using ADULT with an MLP model for Tabular data. 
+
+\begin{itemize}
+	\item For Computer Vision we used CelebA (with \texttt{Smiling} as the binary target and \texttt{Male} as the sensitive attribute, images resized to $64\times64$) along with a CNN consisting of three convolutional blocks ($32$, $64$, $128$ $3\times3$ filters) with batch normalization, ReLU activation, $2\times2$ max-pooling and dropout, followed by a $128$-unit dense ReLU layer and a $2$-way softmax output, trained with the Adam optimizer, sparse categorical crossentropy loss, and $L_2$ regularization ($5\times10^{-4}$).
+	\item For Tabular Data we selected ADULT and applied a multilayer perceptron with three ReLU-activated dense layers with $256$, $128$ and $64$ units, Layer Normalization, dropout, and a final sigmoid activation, trained with Adam.
+\end{itemize}
+
+While we aim for performance-free metrics to measure the contributions, the underlying model should be accurate, as that is the point of the collaboration after all. Hence, we performed a hyperparameter optimization; the parameters are shown in Tab.~\ref{tab:hyper}.
+
+\begin{table}[!t]
+	\centering
+	\setlength{\tabcolsep}{2pt}
+	\begin{tabular}{|l||c|c|}
+		\hline
+		\textbf{Property} & \textbf{ADULT} & \textbf{CelebA} \\
+		\hline\hline
+		Train / Test & 40K / 10K & 30K / 5K \\
+		\hline
+		Input shape & 108 features & $64\times64\times3$ \\
+		Model & MLP & CNN \\
+		Act. func. & ReLU + sigmoid & ReLU + softmax \\
+		Optimizer & Adam & Adam \\
+		LR / DO & $1\times10^{-3}$ / $0.1$/$0.05$ & $1\times10^{-3}$ / $0.2$--$0.3$ \\
+		$L_2$ Reg & $10^{-4}$ & $5\times10^{-4}$ \\
+		Norm & Layer & Batch \\
+		Loss & Binary CCE & Sparse CCE \\
+		\hline
+		Noise $\sigma$ & \multicolumn{2}{c|}{$0.1$} \\
+		\hline
+		GTG metrics & \multicolumn{2}{c|}{$\epsilon_1=0.001$, $\epsilon_2=0.05$, $\epsilon_3=0.002$} \\
+		\hline
+	\end{tabular}
+	\caption{Datasets and model configurations used in the experiments.}
+	\label{tab:hyper}
+\end{table}
+
+The training commences for ten rounds but in our score computation we only take into account the last nine. We simulate a cross-silo setting with $K=4$ and $K=20$ clients. These small numbers are chosen so the individual client contributions remain meaningful, as scores tend to diminish with a large number of participants. To model realistic data heterogeneity, we evaluate clients under both IID and non-IID data distributions (using a Dirichlet distribution with $\alpha=0.5$). For aggregation we applied FedAVG and all experiments are repeated five fold. The implementation is based in Python using the Flower framework and TensorFlow, our code is available as open-source under the MIT License: \url{https://anonymous.4open.science/r/RobShap-F707/}.
+
+For reliability, we inject Gaussian noise with a standard deviation of $\sigma=0.1$. For resilience, $l_\infty$-PGD was used with step size $\alpha=0.007$, $\varepsilon=0.03$ and 40 iterations. Regarding fairness, we utilize the \texttt{sex} attribute for ADULT and the \texttt{Male} attribute for CelebA as the sensitive feature.
+ 
+\paragraph{Trustworthy Client Scores. }
+
+We only show in Fig.~\ref{fig:score_4_NIID} the obtained scores for the 4 client non-IID scenario, as with IID the scores are closer to zero (as expected). A consistent pattern emerges: the scores exhibit high variance, underscoring severe inconsistencies across metrics. Several dominant clients appear that substantially improve the global model according to performance while simultaneously degrading (or being actively harmful to) another objective. This is where the trade-offs between performance, fairness, reliability, and resilience are the most pronounced. For instance, clients enhancing fairness or protection against attacks often do so at the direct expense of baseline accuracy, demonstrating that trustworthy behavior cannot be achieved by optimizing for global accuracy alone. Contribution analysis also reveals that trustworthiness in federated systems is inherently client-dependent: some clients consistently exhibit positive, while others negative effects on particular aspects, providing critical diagnostic insights and a foundation for governance mechanisms to safely steer federated AI systems.
+
+\begin{figure}[!b]
+\centering
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/S_legend.png}
+    \end{subfigure}
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/S_A_4_N_l1o.png}
+        \caption{ADULT / LOO.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/S_A_4_N_gtg.png}
+        \caption{ADULT / GTG.}
+    \end{subfigure}
+    
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/S_C_4_N_l1o.png}
+        \caption{CelebA / LOO.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/S_C_4_N_gtg.png}
+        \caption{CelebA / GTG.}
+    \end{subfigure}
+    \vspace{-0.2cm}
+    \caption{Computed scores for the 4 non-IID clients.}
+    \label{fig:score_4_NIID}
+\end{figure}
+
+\begin{figure}[!b]
+    \centering
+    \begin{subfigure}{0.45\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/S_legend.png}
+    \end{subfigure}
+    
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/SD_20_A_N_l1o.png}
+        \caption{ADULT / LOO.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/SD_20_A_N_gtg.png}
+        \caption{ADULT / GTG.}
+    \end{subfigure}
+
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/SD_20_C_N_l1o.png}
+        \caption{CelebA / LOO.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/SD_20_C_N_gtg.png}
+        \caption{CelebA / GTG.}
+    \end{subfigure}
+    \vspace{-0.2cm}
+    \caption{Score distributions of the 20 non-IID clients.}
+    \label{fig:score_dist_20_NIID}
+\end{figure}
+
+\paragraph{Trustworthy Score Distributions. }
+
+Instead of focusing on individuals, Fig.~\ref{fig:score_dist_20_NIID} displays the score distributions in the 20 non-IID client setting. While increasing the federation size partially smooths the extreme individual variations seen with K=4, the non-IID results still reveal stark deviations from the symmetric, zero-centered bell curves of the IID case. This is profoundly visible with $\mathtt{LOO}$ and ADULT, where distinct negative and positive shifts emerge across $\mathtt{perf}$, $\mathtt{rel}$, and $\mathtt{res}$. In contrast, $\mathtt{GTG}$-based scores remain notably more conservative, falling within a smaller numerical scale and avoiding severe shifts. Furthermore, the underlying scoring mechanism plays a crucial role; $\mathtt{GTG}$ and $\mathtt{LOO}$ frequently misalign, showing inconsistencies despite utilizing identical evaluation functions. Finally, the score concentration proves highly dataset-dependent, with distinct modalities showing unique sensitivities. This confirms that data characteristics inherently govern how specific trustworthiness dimensions fluctuate, dictating how individual client contributions must be evaluated and perceived across the entire federated network.
+
+\begin{table}[!t]
+    \centering
+    \resizebox{\columnwidth}{!}{
+    \footnotesize
+    \setlength{\tabcolsep}{1.2pt}
+    \begin{tabular}{ccc||cc|cc|cc}
+        \multicolumn{3}{c||}{\multirow{2}{*}{\textbf{Setting}}}
+        & \multicolumn{2}{c|}{\textbf{$\mathtt{fair}$}}
+        & \multicolumn{2}{c|}{\textbf{$\mathtt{rel}$}}
+        & \multicolumn{2}{c}{\textbf{$\mathtt{res}$}} \\
+        &&& $\Phi$ & $L_2$ & $\Phi$ & $L_2$ & $\Phi$ & $L_2$ \\
+        \hline\hline
+        \multirow{4}{*}{\rotatebox{90}{ADULT}} & \multirow{2}{*}{4} & I &
+        0.179 & 0.027 & -0.150 & 0.015 & 0.240 & 0.017 \\
+        && N &
+        0.040 & 0.052 & -0.358 & 0.041 & -0.280 & 0.035 \\
+        \cline{2-9}
+        & \multirow{2}{*}{20} & I &
+        -0.164 & 0.006 & 0.212 & 0.003 & 0.107 & 0.006 \\
+        && N &
+        -0.227 & 0.029 & -0.219 & 0.014 & -0.212 & 0.023 \\
+        \hline
+        \multirow{4}{*}{\rotatebox{90}{CelebA}} & \multirow{2}{*}{4} & I &
+        0.202 & 0.023 & 0.100 & 0.048 & 0.500 & 0.020 \\
+        && N &
+        -0.775 & 0.102 & -0.775 & 0.105 & -0.316 & 0.310 \\
+        \cline{2-9}
+        & \multirow{2}{*}{20} & I &
+        -0.188 & 0.013 & 0.060 & 0.016 & 0.153 & 0.028 \\
+        && N &
+        -0.346 & 0.035 & -0.195 & 0.033 & -0.139 & 0.114 \\        
+    \end{tabular}
+    }
+    \caption{Comparing the $\mathtt{GTG}$-based performance score to the trustworthy scores where I and N stands for IID and non-IID, respectively.}
+    \label{tab:score_diff_GTG}
+\end{table}
+ 
+\begin{figure}[!t]
+    \centering    
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/H_4_A_N_l1o.png}
+        \caption{ADULT / LOO.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/H_4_A_N_gtg.png}
+        \caption{ADULT / GTG.}
+    \end{subfigure}
+
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/H_4_C_N_l1o.png}
+        \caption{CelebA / LOO.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.22\textwidth}
+        \includegraphics[width=\linewidth]{figs/short/H_4_C_N_gtg.png}
+        \caption{CelebA / GTG.}
+    \end{subfigure}
+    \vspace{-0.2cm}
+    \caption{Heatmap of the pair-wise score correlations for the 4 non-IID client setting.}
+    \label{fig:score_heat_4_N}
+\end{figure}
+
+\paragraph{Trustworthy Score Differences. }
+
+We also analyze the divergence of trustworthiness scores from the baseline performance score. To capture the discrepancies in implied client orderings, we apply the Spearman correlation coefficient ($\Phi$), ranging from $[-1,1]$. Positive or negative values denote corresponding correlations, growing stronger as they move further from zero. Tab.~\ref{tab:score_diff_GTG} reports these values using the $\mathtt{GTG}$ method. The key finding of our paper emerges from this table: particularly under realistic non-IID conditions, the $\Phi$ coefficients frequently exhibit strong negative values (e.g., reaching $-0.775$). This reveals a stark inverse relationship (i.e., a critical trade-off) between performance and trustworthiness. Consequently, optimizing solely for accuracy inevitably penalizes reliability or fairness. For collaborative federations, evaluating participants via a single performance metric is highly deceptive; it is imperative to simultaneously monitor all trustworthy dimensions to prevent systemic vulnerabilities.
+
+\paragraph{Trustworthy Score Correlations. }
+
+Lastly, instead of merely comparing trustworthy scores to performance, we analyze their relationships with one another. This is visualized as a heatmap of Spearman correlations in Fig.~\ref{fig:score_heat_4_N} for 4 non-IID clients. The pairwise analysis definitively confirms that performance evaluations are inadequate proxies for trustworthiness. Across our configurations, correlations between $\mathtt{perf}$ and the trustworthiness metrics often shift into heavily negative territory, highlighting the severe trade-offs induced by data heterogeneity. Conversely, the trustworthiness dimensions demonstrate significantly stronger inter-correlations. Notably, $\mathtt{rel}$ and $\mathtt{res}$ consistently correlate above $0.5$, reflecting their shared theoretical foundation in model robustness. Furthermore, on the ADULT dataset, $\mathtt{fair}$ correlates highly with both robustness metrics, suggesting an intrinsic link between equitable data representation and a model's overarching resilience to structural perturbations.
+
+\section{Conclusion}
+\label{sec:con}
+
+Our investigation demonstrates that evaluating clients in Federated Learning solely through performance metrics provides an incomplete, and often misleading, picture of their true contribution. By extending client evaluation to encompass the pillars of trustworthiness (i.e., fairness and robustness), we reveal that a client's value is highly context-dependent, often exhibiting strict trade-offs between predictive performance and system safety. Our findings have profound implications for incentive design: a reward system based only on accuracy may inadvertently penalize clients who are essential for ensuring the model's trustworthiness. Future work should explore how these multi-dimensional scores can be integrated into a unified, holistic reward allocation scheme that prioritizes the deployment of truly dependable and trustworthy AI systems.
+
+\subsubsection*{Acknowledgments}
+Project no. 145832, implemented with the support provided by the Ministry of Innovation and Technology from the NRDI Fund, financed under the PD\_23 funding scheme. 
+
+
+\bibliography{ref}
+
+\end{document}

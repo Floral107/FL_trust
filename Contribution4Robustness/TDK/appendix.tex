@@ -1,0 +1,325 @@
+\begin{document}
+
+
+% ===== IID - ADULT, CIFAR, IMDB (4 és 20 kliens) =====
+\begin{figure}[H]
+    \centering
+    
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{ADULT}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{CIFAR}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{IMDB}
+    \end{minipage}
+    
+    % --- 1. SOR: IID, 4 Kliens (Balról jobbra: ADULT, CIFAR, IMDB) ---
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_rob_loss_iid_4clients_l1o.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_rob_loss_iid_4clients_gtg.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_rob_loss_iid_4clients_l1o.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_rob_loss_iid_4clients_gtg.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_rob_loss_iid_4clients_l1o.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_rob_loss_iid_4clients_gtg.png}
+    \end{subfigure}
+    \vfill    
+    % --- 2. SOR: IID, 20 Kliens (Balról jobbra: ADULT, CIFAR, IMDB) ---
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_rob_loss_iid_20clients_l1o.png}
+        \caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_rob_loss_iid_20clients_gtg.png}
+        \caption{GTG}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_rob_loss_iid_20clients_l1o.png}
+        \caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_rob_loss_iid_20clients_gtg.png}
+        \caption{GTG}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_rob_loss_iid_20clients_l1o.png}
+        \caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_rob_loss_iid_20clients_gtg.png}
+        \caption{GTG}
+    \end{subfigure}
+
+    \caption{Átlagos kliens-hozzájárulás a megbízhatósághoz (rózsaszín) és a veszteséghez (zöld) az ADULT adathalmazon 9 kör alatt, IID felosztással
+    Felső sor: 4 kliens. Alsó sor: 20 kliens.}
+    \label{fig:all_iid_avg_loss}
+\end{figure}
+
+
+% ===== Non-IID - ADULT, CIFAR, IMDB (4 és 20 kliens) =====
+\begin{figure}[H]
+    \centering
+
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{ADULT}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{CIFAR}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.32\linewidth}
+        \centering
+        \textit{IMDB}
+    \end{minipage}
+
+    
+    % --- 1. SOR: Non-IID, 4 Kliens (Balról jobbra: ADULT, CIFAR, IMDB) ---
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_rob_loss_Non-IID_4clients_l1o.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_rob_loss_Non-IID_4clients_gtg.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_rob_loss_Non-IID_4clients_l1o.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_rob_loss_Non-IID_4clients_gtg.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_rob_loss_Non-IID_4clients_l1o.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_rob_loss_Non-IID_4clients_gtg.png}
+    \end{subfigure}
+    \vfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_rob_loss_Non-IID_20clients_l1o.png}
+        \caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_rob_loss_Non-IID_20clients_gtg.png}
+        \caption{GTG}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_rob_loss_Non-IID_20clients_l1o.png}
+        \caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_rob_loss_Non-IID_20clients_gtg.png}
+        \caption{GTG}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_rob_loss_Non-IID_20clients_l1o.png}
+        \caption{LOO}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.15\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_rob_loss_Non-IID_20clients_gtg.png}
+        \caption{GTG}
+    \end{subfigure}
+
+    \caption{A kliensek átlagos megbízhatósági hozzájárulása non-IID felosztással. 
+    Felső sor: 4 kliens. Alsó sor: 20 kliens.}
+    \label{fig:all_non_iid_avg_loss}
+\end{figure}
+
+
+% ===== 20 Kliens IID - Körök (ADULT, CIFAR, IMDB) =====
+\begin{figure}[H]
+    \centering
+    
+    % --- 1. SOR: ADULT ---
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{ADULT}
+        \end{minipage}
+        \vfill
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_box_20clients_l1o.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//adult/rel/adult_box_20clients_gtg.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{CIFAR}
+        \end{minipage}
+        \vfill
+    % --- 2. SOR: CIFAR (Eredeti) ---
+
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_box_20clients_l1o.png}
+            % Nincs caption, a kérés szerint
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifar_box_20clients_gtg.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{IMDB}
+        \end{minipage}
+        \vfill
+    % --- 3. SOR: IMDB ---
+
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_box_20clients_l1o.png}
+            \caption{LOO} % Kérés szerint csak itt van caption
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdb_box_20clients_gtg.png}
+            \caption{GTG} % Kérés szerint csak itt van caption
+    \end{subfigure}
+
+
+    \caption{20 kliens megbízhatósági hozzájárulása 10 körön keresztül. 
+    Sorok (fentről le): ADULT, CIFAR-10, IMDB. 
+    IID felosztásban.}
+    \label{fig:all_datasets_box_20_iid}
+\end{figure}
+
+
+% ===== 20 Kliens Non-IID - Körök (ADULT, CIFAR, IMDB) =====
+\begin{figure}[H]
+    \centering
+    
+    % --- 1. SOR: ADULT ---
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{ADULT}
+        \end{minipage}
+        \vfill
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//adult/rel/adultnoniid_box_20clients_l1o.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//adult/rel/adultnoniid_box_20clients_gtg.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{CIFAR}
+        \end{minipage}
+        \vfill
+    % --- 2. SOR: CIFAR (Eredeti) ---
+
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifarnoniid_box_20clients_l1o.png}
+            % Nincs caption, a kérés szerint
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//cifar/rel/cifarnoniid_box_20clients_gtg.png}
+            % Nincs caption, a kérés szerint
+    \end{subfigure}
+
+        \begin{minipage}[b]{0.5\linewidth}
+            \centering
+            \textit{IMDB}
+        \end{minipage}
+        \vfill
+    % --- 3. SOR: IMDB ---
+
+    \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdbnoniid_box_20clients_l1o.png}
+            \caption{LOO} % Kérés szerint csak itt van caption
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.49\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Article//figs//imdb/rel/imdbnoniid_box_20clients_gtg.png}
+            \caption{GTG} % Kérés szerint csak itt van caption
+    \end{subfigure}
+
+
+    \caption{20 kliens megbízhatósági hozzájárulása 10 körön keresztül. 
+    Sorok (fentről le): ADULT, CIFAR-10, IMDB. 
+    Non-IID felosztásban.}
+    \label{fig:all_datasets_box_20_Non-IID}
+\end{figure}
+
+
+\end{document}
+

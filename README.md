@@ -91,19 +91,11 @@ are currently backed by fewer than 5 seeds.
   The cause is not established — two candidate mechanisms were tested and neither
   reproduced it. ADULT/IMDB ET arms and CelebA ET-adv appear unaffected, but the
   check was not exhaustive and other cells may be involved.
-- *Possible duplicate runs.* Three ET-fair seeds (123, 2025, 9928) report
-  identical deterministic metrics at K=4 and K=20, suggesting those cells may
-  share a model.
 - *Utilization-table rows are per-metric diagonals* — each row comes from the run
   weighted for that metric, so the accuracy row is not the accuracy of the model
   in the resilience row. At CelebA K=4 the resilience-targeted run costs 0.25
   accuracy; the claim that accuracy stays within ~0.02 of the baseline may need
   rephrasing. The full weight-metric × eval-metric matrix is in `data/{st,dy}/`.
-- *Weight clipping.* The thesis describes clipping each weight to [0.5, 2]; every
-  committed config has `weight-cap = 0.0`, which disables it.
-- *Metric protocol drift.* The MIA configuration differs between `data/combo/`
-  and `data/{bl,st,dy,et}/`; the CelebA in-loop resilience proxy attacks at
-  ε=0.03 where evaluation uses ε=0.01.
 
 ## License
 

@@ -1,0 +1,113 @@
+%--------------------------------------------------------------------------------------
+% AI Nyilatkozat
+%--------------------------------------------------------------------------------------
+%----------------------------------------------------------------------------
+\chapter*{Nyilatkozat generatív mesterséges intelligencia alkalmazásáról}
+%----------------------------------------------------------------------------
+
+\noindent $\Box$ \textbf{Nem használtam} semmilyen generatív MI segédeszközt.
+
+\noindent $\Box$ \textbf{Használtam} generatív MI segédeszközt. Az MI-vel generált tartalmakat ellenőriztem, a generált kimenetek valóságtartalmáról meggyőződtem, az alábbi táblázatban megfelelően jelöltem minden használatot.
+
+
+\begin{table}[H]
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\renewcommand{\arraystretch}{1.1}
+\noindent
+\begin{tabular}{|p{2.7cm}|p{2.6cm}|p{7.4cm}|p{1.5cm}|}\hline
+\textbf{Felhasználási módok} 
+  & \textbf{Generatív MI eszköz(ök) neve} 
+  & \textbf{Érintett részek (fejezet, oldalszám, hivatkozás)} 
+  & \textbf{Használat becsült aránya} \\ \hline\hline
+
+Irodalomkutatás 
+  & -- 
+  & - 
+  & 0\% \\ \hline
+\textbf{Prompt lényegi része}  
+  & \multicolumn{3}{|p{11.5cm}|}{-} \\ \hline\hline
+
+Programkód generálása 
+  & \makecell{OpenAI\\ChatGPT}
+  & -- 
+  & kb.\ 13\% \\ \hline
+\textbf{Prompt lényegi része } 
+  & \multicolumn{3}{|p{11.5cm}|}{„Írj Python függvényt, amely  LOO hozzájárulását számolja a robusztussági metrika (calculate\_robustness\_score) alapján.”}\\[2pt]
+  & \multicolumn{3}{|p{11.5cm}|}{
+  „Készíts függvényt, ami beolvassa a megadott séma szerinti elnevezésű \texttt{.keras} fájlokat, és ezeket kliensmodellekként adja vissza további feldolgozáshoz.”}\\[2pt] 
+  & \multicolumn{3}{|p{11.5cm}|}{
+  „Hozz létre egy, az alábbi példához hasonló függvényt, de ne csak egy \texttt{calc\_rob} függvényt hívjon meg, hanem ciklusban több metrikaszámító függvényt is (pl.\ \texttt{calc\_loss}, \texttt{calc\_fair}, \texttt{calc\_adv}) minden kliensre...”} \\ \hline\hline
+
+Új ötletek, megoldási javaslatok generálása 
+  & -
+  & -
+  & kb.\ 0\% \\ \hline 
+  & \multicolumn{3}{|p{11.5cm}|}{-} \\ \hline\hline
+
+Vázlat létrehozása (szövegstruktúra, vázlatpontok) 
+  & \makecell{OpenAI\\ChatGPT}
+  & \ref{chap: hatter}. fejezet Háttér  
+  & kb.\ 5\% \\ \hline 
+  & \multicolumn{3}{|p{11.5cm}|}{„Javasolj alfejezetszerkezetet, egy szakdolgozat Háttér fejezetéhez amely a következő témákat tárgyalja...”} \\ \hline
+
+
+Szövegblokkok létrehozása 
+  & \makecell{OpenAI\\ChatGPT}
+  & \ref{chap: bev} Bevezetés, \ref{chap: kiert} Kiértékelés, \ref{tab: global_round_diff} táblázat, \ref{tab: rob_adv_spearman} táblázat, \ref{tab: spearman} táblázat
+  & kb.\ 10\% \\ \hline
+\textbf{Prompt lényegi része}  
+  & \multicolumn{3}{|p{11.5cm}|}{„Fogalmazd át a következő bekezdést úgy, hogy erősebben hangsúlyozza a robusztusság fontosságát a federált tanulásban.”}\\[2pt]
+  & \multicolumn{3}{|p{11.5cm}|}{
+  „Írj egy rövid, captiont a következő táblázathoz...”} \\ \hline\hline
+
+Képek generálása illusztrációs célból 
+  & -- 
+  & - 
+  & 0\% \\ \hline
+\textbf{Prompt lényegi része}  
+  & \multicolumn{3}{|p{11.5cm}|}{-} \\ \hline\hline
+
+Adatvizualizáció, grafikonok generálása adatpontok alapján 
+  & \makecell{OpenAI\\ChatGPT}
+  & \ref{chap: kiert} Kiértékelés;
+    \ref{fig:all_iid_rob_adv_fair} ábra,
+    \ref{fig:all_iid_dist} ábra,
+    \ref{fig:all_noniid_dist} ábra,
+    \ref{fig:all_iid_avg} ábra,
+    \ref{fig:all_datasets_box_4} ábra,
+     Melléklet,
+    \ref{fig:all_iid_rob_fair_adv_20} ábra
+    \ref{fig:all_datasets_box_20_iid} ábra,
+    \ref{fig:all_datasets_box_20_Non-IID} ábra, 
+  & kb.\ 8\% \\ \hline
+\textbf{Prompt lényegi része}  
+  & \multicolumn{3}{|p{11.5cm}|}{„Készíts grafikont a amely boxploton ábrázolja a következőket...”} \\ \hline\hline
+
+Prezentáció készítése 
+  & --
+  & -
+  & kb.\ 0\% \\ \hline
+\textbf{Prompt lényegi része}  
+  & \multicolumn{3}{|p{11.5cm}|}{-} \\ \hline\hline
+
+Egyéb (fordítás, nyelvi stilizálás) 
+  & \makecell{OpenAI\\ChatGPT}
+  & \ref{chap: abstarct}{Kivonat}, \ref{chap: kapcs_m} Kapcsolodó munkák
+  & kb.\ 2\% \\ \hline
+\textbf{Prompt lényegi része}  
+  & \multicolumn{3}{|p{11.5cm}|}{„Fordítsd le angolra a következő kivonatot.”}\\[2pt]
+  & \multicolumn{3}{|p{11.5cm}|}{
+  „Foglald össze magyarul a következő bekezdést...”} \\ \hline\hline
+
+\multicolumn{3}{|p{11.5cm}|}{\textbf{Összesített százalékos érték (a feladat érdemi részére nézve):}} 
+  & \textbf{kb.\ 33\%} \\ \hline
+
+\multicolumn{4}{|p{14.3cm}|}{\textbf{Összesített érték rövid, szöveges indoklása:} 
+A generatív MI-t támogató eszközként használtam:  kódrészletek és vizualizációs sablonok generálására, a dolgozat szerkezetének megtervezésére, valamint szövegblokkok fordítására és stilisztikai finomítására. A kutatási kérdések megfogalmazását, a kísérleti tervet, az implementáció döntő részét, a futtatásokat és az eredmények értelmezését önállóan végeztem; a generatív MI az érdemi munka körülbelül 38\%-ában nyújtott segítséget, főként támogató, nem helyettesítő jelleggel.} \\ \hline
+
+\end{tabular}
+
+\end{table}
+
+

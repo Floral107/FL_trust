@@ -1,0 +1,35 @@
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\selecthungarian
+
+%----------------------------------------------------------------------------
+% Abstract in Hungarian
+%----------------------------------------------------------------------------
+\chapter*{Kivonat}\addcontentsline{toc}{chapter}{Kivonat}
+\label{chap: abstarct}
+A dolgozat a federált tanulásban használt globális modellek robusztusságának vizsgálatára fókuszál, különösen arra, hogy az egyes kliensek milyen mértékben járulnak hozzá a modell ellenálló képességéhez. A meglévő irodalom elsősorban a pontosságot és a konvergenciát helyezi előtérbe, miközben a zajjal, mérési hibákkal vagy rosszindulatú bemeneti módosításokkal szembeni stabilitás gyakran háttérbe szorul. Ezzel szemben a dolgozat célja egy olyan robusztusságmetrika bevezetése, amely bemeneti zaj hatására bekövetkező teljesítményváltozással méri a modellek stabilitását, és ezt federált környezetben, kliensekre lebontva értelmezi. A kliensek hozzájárulásának számszerűsítésére a két különböző approximációját alkalmazzuk: egy gyors, lineáris megoldást, valamint egy korszerű, state-of-the-art megközelítést.
+
+A robusztussági szempontok mellett a dolgozat a Trustworthy AI keretrendszeréhez illeszkedve a modellek védettségét és méltányosságát is vizsgálja, hogy feltárja a teljesítmény, a robusztusság és a döntések igazságossága közötti kompromisszumokat. Az eredmények azt mutatják, hogy a robusztusság szempontjából kulcsfontosságú kliensek nem feltétlenül azok, amelyek a legnagyobb mértékben javítják a pontosságot, és a különböző szempontok (robusztusság, védettség, méltányosság) eltérő „kritikus” klienseket emelnek ki. Ez megerősíti, hogy a robusztussági hozzájárulás önálló és nélkülözhetetlen dimenzió a federált tanulási rendszerek megbízhatóságának értékelésében, és alapot ad olyan jövőbeli kliensszelekciós és elszámoltathatósági mechanizmusok számára, amelyek kifejezetten a bizalomra érdemesebb, stabilabb modellek kialakítását célozzák. 
+
+
+\vfill
+\selectenglish
+
+
+%----------------------------------------------------------------------------
+% Abstract in English
+%----------------------------------------------------------------------------
+\chapter*{Abstract}\addcontentsline{toc}{chapter}{Abstract}
+
+The thesis focuses on the robustness of global models used in federated learning, in particular on the extent to which individual clients contribute to the resilience of the model. While the existing literature primarily emphasizes accuracy and convergence, stability against noise, measurement errors, or malicious input perturbations is often treated as a secondary concern. In contrast, the aim of this work is to introduce a robustness metric that quantifies model stability via the performance degradation caused by input noise, and to interpret this metric in a federated setting, decomposed at the client level. To quantify client contributions, we apply two different approximations: a fast, linear method and a modern, state-of-the-art approach.
+
+Beyond robustness, the thesis, in line with the Trustworthy AI framework, also examines the protection and fairness of the models, in order to uncover the trade-offs between performance, robustness, and the fairness of decisions. The results show that the clients that are critical from a robustness perspective are not necessarily those that improve accuracy the most, and that different perspectives (robustness, protection, fairness) highlight different “critical” clients. This confirms that robustness contribution is an independent and indispensable dimension in assessing the reliability of federated learning systems, and it provides a foundation for future client selection and accountability mechanisms that explicitly aim at building more trustworthy and stable models.
+
+
+\vfill
+\selectthesislanguage
+
+\newcounter{romanPage}
+\setcounter{romanPage}{\value{page}}
+\stepcounter{romanPage}

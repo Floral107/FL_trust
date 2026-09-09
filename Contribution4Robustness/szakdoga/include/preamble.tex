@@ -1,0 +1,99 @@
+%--------------------------------------------------------------------------------------
+% Page layout setup
+%--------------------------------------------------------------------------------------
+% we need to redefine the pagestyle plain
+% another possibility is to use the body of this command without \fancypagestyle
+% and use \pagestyle{fancy} but in that case the special pages
+% (like the ToC, the References, and the Chapter pages)remain in plane style
+
+\pagestyle{plain}
+\marginsize{35mm}{25mm}{15mm}{15mm}
+
+\setcounter{tocdepth}{3}
+%\sectionfont{\large\upshape\bfseries}
+\setcounter{secnumdepth}{3}
+
+\sloppy % Margón túllógó sorok tiltása.
+\widowpenalty=10000 \clubpenalty=10000 %A fattyú- és árvasorok elkerülése
+\def\hyph{-\penalty0\hskip0pt\relax} % Kötőjeles szavak elválasztásának engedélyezése
+
+
+%--------------------------------------------------------------------------------------
+% Setup hyperref package
+%--------------------------------------------------------------------------------------
+\hypersetup{
+    % bookmarks=true,            % show bookmarks bar?
+    unicode=true,              % non-Latin characters in Acrobat's bookmarks
+    pdftitle={\vikcim},        % title
+    pdfauthor={\szerzoMeta},    % author
+    pdfsubject={\vikdoktipus}, % subject of the document
+    pdfcreator={\szerzoMeta},   % creator of the document
+    pdfproducer={},    % producer of the document
+    pdfkeywords={},    % list of keywords (separate then by comma)
+    pdfnewwindow=true,         % links in new window
+    colorlinks=true,           % false: boxed links; true: colored links
+    linkcolor=black,           % color of internal links
+    citecolor=black,           % color of links to bibliography
+    filecolor=black,           % color of file links
+    urlcolor=black             % color of external links
+}
+
+
+%--------------------------------------------------------------------------------------
+% Set up listings
+%--------------------------------------------------------------------------------------
+
+
+
+%--------------------------------------------------------------------------------------
+% Set up theorem-like environments
+%--------------------------------------------------------------------------------------
+% Using ntheorem package -- see http://www.math.washington.edu/tex-archive/macros/latex/contrib/ntheorem/ntheorem.pdf
+
+\theoremstyle{plain}
+\theoremseparator{.}
+\newtheorem{example}{\pelda}
+
+\theoremseparator{.}
+%\theoremprework{\bigskip\hrule\medskip}
+%\theorempostwork{\hrule\bigskip}
+\theorembodyfont{\upshape}
+\theoremsymbol{{\large \ensuremath{\centerdot}}}
+\newtheorem{definition}{\definicio}
+
+\theoremseparator{.}
+%\theoremprework{\bigskip\hrule\medskip}
+%\theorempostwork{\hrule\bigskip}
+\newtheorem{theorem}{\tetel}
+
+
+%--------------------------------------------------------------------------------------
+% Some new commands and declarations
+%--------------------------------------------------------------------------------------
+\newcommand{\code}[1]{{\upshape\ttfamily\scriptsize\indent #1}}
+\newcommand{\doi}[1]{DOI: \href{http://dx.doi.org/\detokenize{#1}}{\raggedright{\texttt{\detokenize{#1}}}}} % A hivatkozások közt így könnyebb DOI-t megadni.
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+%\DeclareMathOperator*[1]{\floor}{arg\,max}
+\DeclareMathOperator{\sign}{sgn}
+\DeclareMathOperator{\rot}{rot}
+
+
+%--------------------------------------------------------------------------------------
+% Setup captions
+%--------------------------------------------------------------------------------------
+\setkomafont{captionlabel}{\bfseries}
+\setkomafont{caption}{\footnotesize\itshape}
+
+\captionsetup[figure]{
+	width=.75\textwidth,
+	aboveskip=10pt
+}
+
+%--------------------------------------------------------------------------------------
+% Hyphenation exceptions
+%--------------------------------------------------------------------------------------
+
+
+\author{\vikszerzo}
+\title{\viktitle}

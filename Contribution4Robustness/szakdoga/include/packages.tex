@@ -1,0 +1,59 @@
+% Language support
+\usepackage[english,magyar]{babel}
+%\usepackage{cmap}
+\usepackage{amsfonts,amsmath,amssymb} % Mathematical symbols.
+%\usepackage[ruled,boxed,resetcount,linesnumbered]{algorithm2e} % For pseudocodes. % beware: this is not compatible with LuaLaTeX, see http://tex.stackexchange.com/questions/34814/lualatex-and-algorithm2e
+\usepackage{booktabs, textcomp}
+\usepackage{graphicx, wrapfig, float, stfloats}
+%\usepackage{subfig}
+\usepackage{subcaption}
+\usepackage{mathtools, multirow, soul, comment, afterpage}
+\usepackage{algorithm, algpseudocode}
+\usepackage{makecell}
+\usepackage{t1enc}
+
+
+%\usepackage{amsmath,amsbsy,amssymb,amsthm,amsfonts,bbm}
+
+\usepackage[table]{xcolor}
+
+%\usepackage{fancyhdr}
+%\usepackage{lastpage}
+
+\usepackage{anysize}
+%\usepackage{sectsty}
+\usepackage{setspace} % For setting line spacing
+
+\usepackage[unicode]{hyperref} % For hyperlinks in the generated document.
+\usepackage{xcolor}
+\usepackage{listings} % For source code snippets.
+
+\usepackage[amsmath,thmmarks]{ntheorem} % Theorem-like environments.
+
+%\usepackage[hang]{caption}
+
+\onehalfspacing
+
+\newcommand{\selecthungarian}{
+	\selectlanguage{magyar}
+	\setlength{\parindent}{2em}
+	\setlength{\parskip}{0em}
+	\frenchspacing
+}
+
+\newcommand{\selectenglish}{
+	\selectlanguage{english}
+	\setlength{\parindent}{0em}
+	\setlength{\parskip}{0.5em}
+	\nonfrenchspacing
+	\renewcommand{\figureautorefname}{Figure}
+	\renewcommand{\tableautorefname}{Table}
+	\renewcommand{\partautorefname}{Part}
+	\renewcommand{\chapterautorefname}{Chapter}
+	\renewcommand{\sectionautorefname}{Section}
+	\renewcommand{\subsectionautorefname}{Section}
+	\renewcommand{\subsubsectionautorefname}{Section}
+}
+
+\usepackage[numbers]{natbib}
+\usepackage{xspace}
