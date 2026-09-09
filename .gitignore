@@ -75,3 +75,16 @@ MAIN.tex
 # local-only scratch
 *.local
 vpn.txt
+
+# LaTeX build artifacts
+*.aux
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.bbl
+*.blg
+*.nav
+*.snm
+*.vrb
