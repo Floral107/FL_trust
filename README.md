@@ -68,58 +68,42 @@ a double-inversion that took two rounds of debugging to unpick.
 `paper/sanity_gate.py` enforces this: for every dataset the acc~loss Spearman of
 contributions must be positive under both L1O and GTG.
 
-## Known limitations
+## Known limitations and concerns
 
-- **GTG is not reproducible from the command line alone.** `set_seed` runs once
-  per seed, outside the round loop, while GTG-Shapley draws 30 shuffles per round
-  from the global numpy RNG. Resuming an interrupted run, `FLR_ROUND_ORDER`, and
-  `--num_clients` all change the stream. Measured: reversing round order moved
-  21 of 40 contributions by up to 3.9e-3. L1O is unaffected.
-- **ADULT is re-derived from OpenML on every evaluation.** No cached matrix
-  (CelebA caches `.npz`, IMDB caches embeddings), and `scikit-learn`/`pandas` are
-  unpinned, so a clean-room re-run reproduces ADULT to ~7.6e-3, not exactly.
-- **Coverage.** `paper/sanity_gate.py` reports per-cell seed coverage; `--strict`
-  makes a thin cell fail the gate. 17 cells are currently backed by fewer than
-  5 seeds.
+Recorded during a review of this repository before upload. The first group is
+established; the second is a list of concerns, not settled results.
 
-## Concerns found during the check before upload
+**Reproducibility.** GTG contributions depend on the order rounds were scored in,
+not only on `(dataset, seed, method)` — `set_seed` runs once per seed while
+GTG-Shapley draws from the global numpy RNG each round, so resuming a run or
+changing `FLR_ROUND_ORDER` shifts them (measured: 21 of 40 values moved by up to
+3.9e-3). L1O is unaffected. ADULT is re-derived from OpenML on every evaluation
+with `scikit-learn`/`pandas` unpinned, so it reproduces to ~7.6e-3 rather than
+exactly. `paper/sanity_gate.py --strict` reports per-cell seed coverage; 17 cells
+are currently backed by fewer than 5 seeds.
 
-Found while reviewing this repository prior to upload, recorded here so they are
-not mistaken for accepted results. Some may require rephrasing in the thesis.
+**Concerns.**
 
-- **The CelebA ET-fair and ET-dp arms did not converge.** Both sit at ~0.5
-  accuracy on a binary task; ET-fair's loss is ≈ ln 2 (uniform output), ET-dp's
-  is 7.4–8.6 (diverged). Their fairness and privacy scores are therefore
-  artifacts — a constant predictor has perfect demographic parity by
-  construction — and those utilization-table cells should be disregarded pending
-  a re-run. **The cause has not been identified.** Two candidate mechanisms were
-  tested in isolation and neither reproduces the collapse: the fairness penalty
-  at λ=2.0 on a comparable architecture trains to 0.98 accuracy, and DP-SGD at
-  the shipped (C=1.0, σ=1.0, batch=32) on a 1.1M-parameter model trains to 0.92.
-  Since the same CelebA ET-fair cells also show the duplicated-seed fault below,
-  a launch/configuration problem in those specific runs is the more likely
-  explanation than anything in the training math — but that is untested.
-  ET-adv and all ADULT/IMDB ET arms are unaffected.
-- **Three ET-fair seeds are duplicated** between K=4 and K=20 (123, 2025, 9928):
-  identical `acc`, `loss` and `res` to the last digit, with only the stochastic
-  metrics differing. Those two cells share a model. A candidate mechanism, not
-  confirmed: `set_num_cl.py` rewrites a shared `pyproject.toml` in place, so
-  concurrent cells on one host can read each other's client count.
-- **Utilization-table rows are per-metric diagonals.** The `acc` row is the
-  accuracy-weighted run; the `res` row is the resilience-weighted run. They are
-  different models, so the accuracy figure is not the accuracy of the model in
-  the `res` row. The claim that accuracy stays within ~0.02 of the baseline holds
-  at K=20 but not at CelebA K=4, where targeting resilience costs 0.25 accuracy
-  (0.913 → 0.660) for a 0.31 resilience gain. The full weight-metric ×
-  eval-metric matrix is already collected in `data/{st,dy}/`; may need rephrasing.
-- **Weight clipping.** The thesis describes clipping each weight to [0.5, 2];
-  every committed config has `weight-cap = 0.0`, which disables it, with
-  `weight-beta = 1.0` (raw transform). Needs resolving in one direction or the
-  other.
-- **Metric protocol drift.** The MIA configuration used for `data/combo/` (5
-  fine-tune epochs, lr 5e-4, 0.2 member ratio) differs from the one used for
-  `data/{bl,st,dy,et}/` and from the thesis (2 epochs, lr 1e-3, 0.5). The CelebA
-  in-loop resilience proxy attacks at ε=0.03 while evaluation uses ε=0.01.
+- *Possible non-convergence in some ET arms.* The CelebA ET-fair and ET-dp runs
+  sit near chance accuracy (~0.5 on a binary task), ET-fair at loss ≈ ln 2.
+  Where a model is near-constant, fairness and privacy saturate for trivial
+  reasons, so those utilization-table cells may not be comparable to the rest.
+  The cause is not established — two candidate mechanisms were tested and neither
+  reproduced it. ADULT/IMDB ET arms and CelebA ET-adv appear unaffected, but the
+  check was not exhaustive and other cells may be involved.
+- *Possible duplicate runs.* Three ET-fair seeds (123, 2025, 9928) report
+  identical deterministic metrics at K=4 and K=20, suggesting those cells may
+  share a model.
+- *Utilization-table rows are per-metric diagonals* — each row comes from the run
+  weighted for that metric, so the accuracy row is not the accuracy of the model
+  in the resilience row. At CelebA K=4 the resilience-targeted run costs 0.25
+  accuracy; the claim that accuracy stays within ~0.02 of the baseline may need
+  rephrasing. The full weight-metric × eval-metric matrix is in `data/{st,dy}/`.
+- *Weight clipping.* The thesis describes clipping each weight to [0.5, 2]; every
+  committed config has `weight-cap = 0.0`, which disables it.
+- *Metric protocol drift.* The MIA configuration differs between `data/combo/`
+  and `data/{bl,st,dy,et}/`; the CelebA in-loop resilience proxy attacks at
+  ε=0.03 where evaluation uses ε=0.01.
 
 ## License
 
