@@ -92,11 +92,14 @@ not mistaken for accepted results. Some may require rephrasing in the thesis.
   is 7.4–8.6 (diverged). Their fairness and privacy scores are therefore
   artifacts — a constant predictor has perfect demographic parity by
   construction — and those utilization-table cells should be disregarded pending
-  a re-run. Likely causes: the DP penalty's trivial optimum is a constant
-  predictor and `et_training.train_with_fair` omits `model.losses`, so the L2
-  weight decay is dropped; and DP-SGD noise scales with √(#params), giving a
-  noise-to-signal ratio of ~33:1 on the 1.14M-parameter CelebA CNN versus ~8:1
-  on ADULT. ET-adv and all ADULT/IMDB ET arms are unaffected.
+  a re-run. **The cause has not been identified.** Two candidate mechanisms were
+  tested in isolation and neither reproduces the collapse: the fairness penalty
+  at λ=2.0 on a comparable architecture trains to 0.98 accuracy, and DP-SGD at
+  the shipped (C=1.0, σ=1.0, batch=32) on a 1.1M-parameter model trains to 0.92.
+  Since the same CelebA ET-fair cells also show the duplicated-seed fault below,
+  a launch/configuration problem in those specific runs is the more likely
+  explanation than anything in the training math — but that is untested.
+  ET-adv and all ADULT/IMDB ET arms are unaffected.
 - **Three ET-fair seeds are duplicated** between K=4 and K=20 (123, 2025, 9928):
   identical `acc`, `loss` and `res` to the last digit, with only the stochastic
   metrics differing. Those two cells share a model. `set_num_cl.py` rewrites a
