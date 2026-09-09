@@ -30,43 +30,44 @@ archive/
 # commands in PIPELINE.md work on a fresh clone. Run them from the repo ROOT,
 # e.g. `python paper/sanity_gate.py` — the scripts use cwd-relative data/ paths
 # on purpose.
-paper/__pycache__/
+Code/paper/__pycache__/
 
 # internal working documents; the root README is the single doc
 AUDIT.md
 REPO_MAP.md
 PIPELINE.md
-data/README.md
+Code/data/README.md
 */README.md
 
 # raw per-seed result CSVs (already merged into data/combo/)
-/results_*.csv
+Code/results_*.csv
 
 # generated table bodies (paper/ builders write these to the repo root, and the
 # paper/_splice_*.py scripts read them from there)
-/tab*.tex
+Code/tab*.tex
 
-# generated figures (regenerate with paper/_run_figs.py; finals live in the article)
-figs/
-data/combo/plots/
+# scratch figures written by Code/paper/_run_figs.py are ignored;
+# the finals used by the manuscripts live under LaTeX/*/figs/ and ARE tracked
+Code/figs/
+Code/data/combo/plots/
 
 # tests & smokes, merge/collect utilities
-/test_*.py
-/smoke_*.py
-data/merge_collected.py
-data/combine_celeba_sources.py
+Code/test_*.py
+Code/smoke_*.py
+Code/data/merge_collected.py
+Code/data/combine_celeba_sources.py
 
 # data: durable CSV artifacts are tracked; backups/staging are not
-data/_*
-data/*.tgz
+Code/data/_*
+Code/data/*.tgz
 
 # logs & backups
 logs/
 *.log
 *.bak*
 
-# paper sources (code release only)
-MAIN.tex
+# (was: MAIN.tex, code-only release. The repo now carries the paper sources too;
+# the unanchored rule also matched UAI/main.tex on case-insensitive filesystems.)
 
 # box-specific ops scripts (one-off fills, watchdogs, per-host launchers)
 *.sh
