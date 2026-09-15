@@ -88,18 +88,80 @@ def coverage(strict: bool):
             for K, g in df.groupby("num_clients"):
                 v = pd.to_numeric(g[col], errors="coerce")
                 n = int(g.loc[v.notna(), "seed"].nunique())
-                if n < len(SEEDS):
-                    bad.append((metric, int(K), n))
+                # A present-but-constant column (GTG truncation returns exact 0.0
+                # for every client when coalition utilities barely move) counts as
+                # covered, yet compute_score_diff drops it: Spearman needs std>0.
+                # So a 5/5 cell can still build Phi from 3 seeds. Count both.
+                nvar = 0
+                for _s, gs in g.groupby("seed"):
+                    vs = pd.to_numeric(gs[col], errors="coerce").to_numpy()
+                    if not np.isnan(vs).all() and np.nanstd(vs) > 1e-12:
+                        nvar += 1
+                if n < len(SEEDS) or nvar < n:
+                    bad.append((metric, int(K), n, nvar))
+                if n < len(SEEDS):  # only real holes gate --strict; zero-variance (A32) is unfixable, report-only
                     thin.append((base, metric, int(K), n))
         if bad:
             print(f"  {base}")
-            for metric, K, n in bad:
-                print(f"      {metric:10s} K={K:<3d} {n}/{len(SEEDS)} seeds"
-                      + ("   <-- EMPTY" if n == 0 else ""))
+            for metric, K, n, nvar in bad:
+                note = "   <-- EMPTY" if n == 0 else ""
+                if nvar < n:
+                    note += f"   [{n - nvar} seed(s) zero-variance -> only {nvar} enter Phi]"
+                print(f"      {metric:10s} K={K:<3d} {n}/{len(SEEDS)} seeds" + note)
     if not thin:
         print("  all cells backed by all 5 seeds")
     else:
         print(f"\n  {len(thin)} under-covered cell(s). Means over these are NOT 5-seed means.")
+        print("  " + ("STRICT: refusing to regenerate." if strict
+                      else "Warning only; pass --strict to make this fail the gate."))
+    return thin
+
+
+FAMILY_METRICS = ["acc", "loss", "fair", "fair_eo", "rel", "res", "priv"]
+
+
+def coverage_families(strict: bool):
+    """Same coverage question for the Tab. 5 families (data/{bl,st,dy,et}).
+
+    coverage() above only reads data/combo, which backs Tab. 3/4. Tab. 5 is built
+    from a different layer that nothing counted -- so an ST/DY cell missing a seed
+    rendered as a 5-seed mean exactly like a combo one did.
+    """
+    print()
+    print("=" * 72)
+    print("COVERAGE - Tab.5 families data/{bl,st,dy,et} (expected 5 seeds)")
+    print("=" * 72)
+    thin = []
+    for path in sorted(glob.glob("data/*/results_*.csv")):
+        fam = os.path.basename(os.path.dirname(path))
+        if fam not in ("bl", "st", "dy", "et"):
+            continue
+        base = fam + "/" + os.path.basename(path)
+        df = pd.read_csv(path)
+        if "seed" not in df.columns:
+            continue
+        # rows are keyed by K plus whichever variant column the family carries
+        keys = ["num_clients"] + [c for c in ("weight_metric", "mode") if c in df.columns]
+        bad = []
+        for metric in [m for m in FAMILY_METRICS if m in df.columns]:
+            for key, g in df.groupby(keys):
+                v = pd.to_numeric(g[metric], errors="coerce")
+                n = int(g.loc[v.notna(), "seed"].nunique())
+                if n < len(SEEDS):
+                    label = key if isinstance(key, tuple) else (key,)
+                    bad.append((metric, label, n))
+                    thin.append((base, metric, label, n))
+        if bad:
+            print("  " + base)
+            for metric, label, n in bad:
+                loc = " ".join(str(x) for x in label)
+                tag = "   <-- EMPTY" if n == 0 else ""
+                print(f"      {metric:8s} {loc:20s} {n}/{len(SEEDS)} seeds" + tag)
+    if not thin:
+        print("  all cells backed by all 5 seeds")
+    else:
+        print()
+        print(f"  {len(thin)} under-covered cell(s) in the Tab.5 layer.")
         print("  " + ("STRICT: refusing to regenerate." if strict
                       else "Warning only; pass --strict to make this fail the gate."))
     return thin
@@ -135,6 +197,7 @@ def main():
             if not ok:
                 failed.append((fam, method))
     thin = coverage(args.strict)
+    thin = thin + coverage_families(args.strict)
 
     if failed:
         print("\nGATE FAILED — loss-sign inversion suspected in:",

@@ -16,7 +16,10 @@ from cw_attack import cw_l2_attack, _wrap_sigmoid_as_softmax
 # These are the values the article reports; callers that omit epsilon/alpha/
 # num_iter get them resolved from this table. Explicit arguments still win.
 PGD_EVAL_PARAMS = {
-    "adult": (0.3, 0.007, 40), "adultnoniid": (0.3, 0.007, 40),
+    # eps 0.3 -> 0.03 (2026-09-14): every shipped adult res number was produced at
+    # 0.03 (the generic fallback below), verified by reproducing 4 shipped points to
+    # 1.5e-4..2.6e-3. At 0.3 adult res saturates to ~0.0001 and the dimension dies.
+    "adult": (0.03, 0.007, 40), "adultnoniid": (0.03, 0.007, 40),
     "celeba": (0.01, 0.0025, 40), "celebanoniid": (0.01, 0.0025, 40),  # eps lowered 0.03->0.01 (0.03 saturated res to 0; 0.01 gives res~0.5)
     "cifar": (0.03, 0.007, 40), "cifarnoniid": (0.03, 0.007, 40),
     "imdb": (0.005, 0.00125, 10), "imdbnoniid": (0.005, 0.00125, 10),

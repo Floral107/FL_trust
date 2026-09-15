@@ -1,0 +1,16 @@
+celeba iid 4 42 l1o_acc
+celeba iid 4 42 l1o_loss
+celeba iid 4 42 l1o_fair
+celeba iid 4 42 l1o_fair_eo
+celeba iid 4 107 l1o_acc
+celeba iid 4 107 l1o_loss
+celeba iid 4 107 l1o_fair
+celeba iid 4 107 l1o_fair_eo
+celeba iid 4 123 l1o_acc
+celeba iid 4 123 l1o_loss
+celeba iid 4 123 l1o_fair
+celeba iid 4 123 l1o_fair_eo
+celeba iid 4 2025 l1o_acc
+celeba iid 4 2025 l1o_loss
+celeba iid 4 2025 l1o_fair
+celeba iid 4 2025 l1o_fair_eo

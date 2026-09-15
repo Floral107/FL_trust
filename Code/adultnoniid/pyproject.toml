@@ -28,7 +28,7 @@ strategy = "fedavg"
 proximal-mu = 0.0
 # Explicit Training (ET). et-mode in {"none", "fair", "adv", "dp"}.
 et-mode = "none"
-et-lambda-fair = 0.5
+et-lambda-fair = 2.0
 et-adv-ratio = 0.5
 et-adv-eps = 0.3
 et-adv-alpha = 0.007

@@ -29,7 +29,7 @@ proximal-mu = 0.0
 # Explicit Training (ET). et-mode in {"none", "fair", "adv", "dp"}.
 # Note: IMDB lacks a sensitive attribute → "fair" falls back to BL training.
 et-mode = "none"
-et-lambda-fair = 0.5
+et-lambda-fair = 2.0
 # adv strength recalibrated 2026-07-08 (advisor comment 5): eps=0.005 is where
 # the converged BL degrades to res~0.47 (0.0015 was toothless). ratio 1.0 +
 # steps 10 = the "strong" recipe that made celeba ET-adv a credible ceiling.

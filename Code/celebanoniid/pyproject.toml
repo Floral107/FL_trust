@@ -30,11 +30,11 @@ strategy = "fedavg"
 proximal-mu = 0.0
 # Explicit Training (ET). et-mode in {"none", "fair", "adv", "dp"}.
 et-mode = "none"
-et-lambda-fair = 0.5
-et-adv-ratio = 0.5
+et-lambda-fair = 2.0
+et-adv-ratio = 1.0
 et-adv-eps = 0.03
 et-adv-alpha = 0.007
-et-adv-steps = 7
+et-adv-steps = 10
 et-dp-clip = 1.0
 et-dp-sigma = 1.0
 # Score-driven aggregation (ST/DY). weight-mode in {"none", "st", "dy"}.

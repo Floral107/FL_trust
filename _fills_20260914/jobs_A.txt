@@ -1,0 +1,9 @@
+celebanoniid noniid 4 42 l1o_fair
+celebanoniid noniid 4 42 l1o_fair_eo
+celebanoniid noniid 4 42 l1o_priv
+celebanoniid noniid 4 42 l1o_rob
+celebanoniid noniid 4 42 gtg_acc
+celebanoniid noniid 4 42 gtg_fair
+celebanoniid noniid 4 42 gtg_fair_eo
+celebanoniid noniid 4 42 gtg_priv
+celebanoniid noniid 4 42 gtg_rob

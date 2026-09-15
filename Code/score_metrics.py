@@ -196,7 +196,7 @@ def build_rel_metric(x_test, y_test, sigma: float = 0.1, num_samples: int = 8) -
 # coalition evaluation stays affordable. Lower num_iter = noisier estimate
 # but preserves ranking.
 RES_PROXY_PARAMS = {
-    "adult": (0.3, 0.007, 7), "adultnoniid": (0.3, 0.007, 7),
+    "adult": (0.03, 0.007, 7), "adultnoniid": (0.03, 0.007, 7),  # 0.3 -> 0.03, see attack_metric.py
     "celeba": (0.03, 0.007, 7), "celebanoniid": (0.03, 0.007, 7),
     "cifar": (0.03, 0.007, 7), "cifarnoniid": (0.03, 0.007, 7),
     "imdb": (0.005, 0.00125, 5), "imdbnoniid": (0.005, 0.00125, 5),  # eps recalibrated 2026-07-08 (see attack_metric.py); 5 iters kept for in-loop affordability
