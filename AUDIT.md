@@ -16,6 +16,9 @@ entry names the concrete failure, not the smell.
 | Fixed 2026-09-14 on branch `fills-eps-fix-2026-09-15` only (master unchanged) | A12, A31 | A12: ET params written back to all 3 `pyproject.toml` (lambda 2.0; celeba ratio 1.0 / steps 10). A31: adult PGD eval eps 0.3 -> 0.03 in both param tables. **The `.tex` files are handed in and stay as submitted**, so the paper's stated 0.3 vs the measured 0.03 is a documented discrepancy, not a fix. Backups `*.bak_a12`, `*.bak_eps`. |
 | Open — needs your decision | A9, A11, A32 | A9: combo `priv` protocol (5, 5e-4, 0.2/0.7) vs the documented (2, 1e-3, 0.5/0.5). A11: now quantified — the celeba in-loop proxy scores in the saturated regime yet ranks effectively; disclose, or align to 0.01 and re-run all celeba ST/DY. A32: presentational — print `\textemdash` for Phi built on a degenerate loss reference (K=4 adult IID currently prints six `+-0.00` values off one seed). |
 | Open — hygiene | A3, A8, A14, A16, A17, A18, A19, A20, A22, A23, A33 | No decision needed; none is urgent. |
+| Fixed 2026-09-15 on branch `direction-b` only (not merged) | A34 | CelebA attribute sidecar. Latent: no shipped number was affected. |
+| Documented 2026-09-15 | A35, A30 (second data point) | A35: ADULT codes s = female, CelebA s = male; every score is symmetric, and direction-b names group A explicitly. |
+| Open — needs a decision (2026-09-15) | A36, A37 | A36: LOO/GTG coalitions are a plain mean while FedAvg is size-weighted, which shifts every non-IID LOO contribution and changes what GTG attributes. A37: GTG's best-coalition step zeroes 25-80% of clients and breaks symmetry, although the Shapley estimate before it matches exact Shapley. |
 
 **Branch note (2026-09-15):** every fix, fill and tool dated 2026-09-14/15 in this file is committed on
 branch `fills-eps-fix-2026-09-15` (`cfdbbe9`, pushed to `github` and `origin`, not merged). A `master`
@@ -225,6 +228,76 @@ reference is degenerate in most seeds, i.e. treat K=4 the way K=20 is already tr
 enter Phi]` next to every affected cell. Also hits celeba K4 GTG acc/fair_eo (3 usable)
 and several adult K20 metrics.
 
+### A34. The CelebA partition cache returned `Male` for any requested sensitive attribute
+`celeba/celeba/task.py`, `celebanoniid/celebanoniid/task.py` (`load_data`) · found and fixed 2026-09-15 on branch `direction-b`
+
+The cache key (`n{K}_p{pid}_tr30000_te5000.npz`) does not include the attribute. A cache
+**hit** returned the stored `s_train` / `s_test` whatever `sensitive_attr` asked for, and a
+cache **miss** stored the requested attribute under that same key, so the first caller
+decided what every later caller got.
+
+**Latent, not realized:** every shipped CelebA run (scoring and ET-fair training) asked for
+`Male`, the attribute every cache on this machine was built with. No number is affected.
+
+**Fix (direction-b):** the cache only ever stores `Male`. Any other attribute is rebuilt
+from the HF label columns into a sidecar `*.s-<attr>.npz`, repeating `load_data`'s row
+selection and split, and written only if the rebuilt `Smiling` and `Male` columns match
+the cached ones. Verified offline for `Young` on `celeba` n1_p0 (28 s; the `Male` path is unchanged).
+
+### A36. LOO and GTG score non-IID clients against a model FedAvg never built
+`robustness_metric.aggregate_models` (plain mean) · `cont_evals.l1o_evals`, `gtg_evals` · `client_app.fit` returns `len(x_train)`
+
+FedAvg weights each client by its training-set size. Every coalition model in LOO and GTG is the
+**plain** mean of the client weights. The IID apps partition into equal parts (`IidPartitioner`,
+ADULT's equal slices), so the two coincide there. The non-IID apps of all three datasets use a
+Dirichlet(0.5) split, so they don't: ADULT non-IID K=4 clients hold 596 / 16 921 / 9 305 / 12 250
+training rows.
+
+Measured with `gtg_check.py` (adultnoniid, K=4, seed 42, 2026-09-15):
+
+```
+round | saved global vs plain mean | vs size-weighted mean | acc: saved global | plain mean of all 4
+  2   | max|dw| 3.9e-02           | 1.2e-07               | 0.8471            | 0.8227
+ 10   | max|dw| 1.6e-02           | 9.8e-08               | 0.8469            | 0.8245
+```
+
+- **LOO** takes v(All) from the saved, size-weighted global model but v(All \ i) from a plain mean,
+  so every client in a round carries the same offset (+0.022 for acc at round 10). Ranks within a
+  round survive; signs and L2 distances do not. Client 0 scores +0.003 as shipped and -0.020 when
+  both sides use the same aggregation.
+- **GTG** attributes u(plain mean of all clients) - u(previous global): the change to a model that
+  was never deployed (0.8245 against the real 0.8469 above).
+
+**Scope:** every non-IID LOO and GTG column in `data/combo`, and the direction-B gap columns if they
+are run unchanged. Not fixed: size-weighting the coalitions changes published numbers, so it needs a
+decision.
+
+### A37. GTG's best-coalition step zeroes most clients and breaks symmetry
+`gtg_shap.py` (`compute` -> `_find_best_subset`, `_calculate_best_subset_values`)
+
+After estimating the Shapley values, `compute()` keeps them only for the clients in the single
+highest-utility coalition it evaluated and sets every other client to exactly 0. This is a different
+mechanism from A32, where coalition utilities barely move and every client is 0.
+
+Measured with `gtg_check.py` (adultnoniid, K=4, seed 42, rounds 2 and 10; `acc`, `gap_acc_dp`,
+`gap_loss_eop`; the real clients, plus a duplicated client, plus two planted group-skewed clients):
+
+- **The estimate before this step is sound.** Against exact Shapley over all 2^K coalitions: max error
+  0.001-0.007 on values of 0.02-0.06, Spearman 0.80-1.00, signs agree for 113 of 114 client values
+  (the exception: +0.0002 exact vs -0.0001). Production output equals it masked by the best
+  coalition in every case, so the check reproduces what `robustness.py` runs.
+- **The step discards 25-80% of it.** For gap utilities the best coalition is often a single client:
+  `gap_loss_eop` at round 10 keeps only client 3 (+0.024) and zeroes client 0, whose exact value is
+  the largest (+0.040), and client 1 (-0.034).
+- **Symmetry fails.** A client entered twice has equal exact values by construction; after the step
+  one copy keeps -0.027 and the other gets 0 (`acc`, round 2), or +0.054 against 0 (`gap_loss_eop`, round 2).
+- **Planted harm disappears.** A client trained on one group only, whose addition lowers the utility
+  (6 cases across the three metrics), gets a negative exact and pre-step value in all 6 and exactly 0
+  from production GTG in all 6.
+
+Not fixed: dropping the step changes every GTG number. Keeping the pre-step vector next to the final
+one needs no extra model evaluations.
+
 ---
 
 ## P1 — results are not reproducible from the command line
@@ -394,6 +467,26 @@ fresh install, and the discrepancy is the same order of magnitude as the smaller
 contributions themselves. **Fix shape:** pin `scikit-learn` and `pandas`, or cache
 the processed ADULT matrix to disk the way CelebA and IMDB already do — which
 would also stop every eval re-downloading and re-encoding the dataset.
+
+**Second data point (2026-09-15, this laptop):** `adultnoniid` / K=4 / seed 42 / round 10 /
+`l1o_fair` differs from `data/combo` by up to **1.36e-2** (global) and **5.2e-3**
+(contribution), while the same run from an unmodified `fills-eps-fix-2026-09-15` checkout
+and from `direction-b` is bit-identical. The drift is the environment, not the code, and
+fairDP drifts more than the 7.6e-3 measured for `acc` above.
+
+### A35. The sensitive group is coded differently in ADULT and CelebA
+`adult*/task.py` (`s = sex == "Female"`) · `celeba*/task.py` (`SENSITIVE_ATTR = "Male"`)
+
+The paper uses the `sex` attribute for both datasets, but s = 1 means **female** in ADULT
+and **male** in CelebA. Every fairness score (fairDP, fairEO) and every direction-B gap
+score is symmetric in the two groups (`|A - B|`), so no number depends on the coding:
+CelebA `l1o_fair` (K=4, seed 42, round 10) is identical with either group as s = 1
+(checked 2026-09-15). It matters only where a group is *named*: signed per-group
+analyses, group-size columns, prose.
+
+**Direction B (branch `direction-b`):** `robustness.py --sensitive_attr` takes `column=value`
+and defaults to female as group A on both datasets (ADULT `sex=Female`, CelebA `Male=0`);
+every gap row records `group_a`. Shipped columns and the handed-in text are unchanged.
 
 ### A14. The interpreter on this machine is in exactly that broken state
 Not a repo bug, but it blocks any local verification.
