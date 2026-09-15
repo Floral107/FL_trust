@@ -6,6 +6,10 @@ cannot move a published number - it can only turn a hole into a value. Idempoten
 
   python fold_in.py            # dry run: report what would be filled
   python fold_in.py --apply    # back up combo/, then write
+
+Paths are cwd-relative, so it also folds other run folders at the repo root, e.g.
+  cd _direction_b && python ../_fills_20260914/fold_in.py --apply
+Direction-B gap columns missing from combo are created (as NaN) before the fill.
 """
 import pandas as pd, glob, os, re, sys, shutil, datetime
 
@@ -49,7 +53,9 @@ for target, items in sorted(fills.items()):
             if src_col not in src.columns:
                 print(f"  [warn] {fp}: no column {src_col}"); continue
             if dst_col not in combo.columns:
-                print(f"  [warn] {tgt}: no column {dst_col}"); continue
+                if "_gap_" not in method:
+                    print(f"  [warn] {tgt}: no column {dst_col}"); continue
+                combo[dst_col] = float("nan")  # new gap column; the NaN-only fill below still never overwrites
             vals = s[src_col].reindex(idx)
             # measure BEFORE writing, else every cell we just filled reads back
             # as "already present" and the report is meaningless

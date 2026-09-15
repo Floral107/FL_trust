@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import sys
 
 # CPU force: hardcoded historically because TF's PTX-JIT path is broken on
@@ -62,6 +63,7 @@ set_seed = next(fn for fn in (
 
 from cont_evals import evaluate_round
 from privacy_metric import make_mia_splits, MIAConfig
+from gap_metrics import gap_methods, group_indices, parse as parse_gap_method
 
 
 gpus = tf.config.list_physical_devices("GPU")
@@ -108,7 +110,12 @@ def parse_arguments():
                             "gtg_rob", "gtg_adv", "gtg_adv_pgd", "gtg_adv_cw",
                             "gtg_fair", "gtg_fair_eo", "gtg_priv",
                             "gtg_acc", "gtg_loss",
-                        ])
+                        ] + gap_methods())
+    parser.add_argument("--sensitive_attr", type=str, default=None,
+                        help="'column=value' defining group A (s = 1). Default: female on "
+                             "both datasets (ADULT 'sex=Female', CelebA 'Male=0'). E.g. "
+                             "'race=Black' (ADULT) or 'Young=1' (CelebA). A non-default "
+                             "attribute writes its own output file.")
 
     parser.add_argument("--root_dir", type=str, default=None,
                         help="Root directory containing experiment results. "
@@ -135,16 +142,41 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def load_test_data(dataset_key: str):
+# Group A (s = 1) when --sensitive_attr is not given: female on both datasets. The paper's
+# CelebA runs coded s = Male; every fairness and gap score is symmetric in the two groups
+# (|A - B|), so the orientation changes group labels and sizes, never a score.
+DEFAULT_SENSITIVE = {"adult": "sex=Female", "celeba": "Male=0"}
+_ADULT_ALIASES = {"sex": "sex=Female", "race": "race=White"}
+
+
+def sensitive_spec(dataset_key: str, sensitive_attr=None):
+    """The 'column=value' that defines group A, or None for a dataset without one."""
+    spec = sensitive_attr or DEFAULT_SENSITIVE.get(dataset_key.replace("noniid", ""))
+    return _ADULT_ALIASES.get(spec, spec) if "adult" in dataset_key else spec
+
+
+def attr_tag(dataset_key: str, sensitive_attr) -> str:
+    """Output-name tag for a non-default attribute, so its rows never share a CSV
+    (or a resume key) with the default one."""
+    spec = sensitive_spec(dataset_key, sensitive_attr)
+    if spec == DEFAULT_SENSITIVE.get(dataset_key.replace("noniid", "")):
+        return ""
+    return "_s-" + re.sub(r"[^A-Za-z0-9]", "-", spec)
+
+
+def load_test_data(dataset_key: str, sensitive_attr=None):
     k = dataset_key.lower()
+    spec = sensitive_spec(dataset_key, sensitive_attr)
     if "adult" in k:
         _, _, x_test, y_test, _, s_test = dataloaders[dataset_key](
-            0, 1, return_sensitive=True, sensitive_attr="sex"
+            0, 1, return_sensitive=True, sensitive_attr=spec
         )
     elif "celeba" in k:
-        _, _, x_test, y_test, _, s_test = dataloaders[dataset_key](
-            0, 1, return_sensitive=True, sensitive_attr="Male", test_only=True,
+        col, _, val = spec.partition("=")
+        _, _, x_test, y_test, _, s_col = dataloaders[dataset_key](
+            0, 1, return_sensitive=True, sensitive_attr=col, test_only=True,
         )
+        s_test = (np.asarray(s_col) == int(val or 1)).astype(np.int32)  # CelebA attributes are 0/1
     else:
         _, _, x_test, y_test = dataloaders[dataset_key](0, 1)
         s_test = None
@@ -187,8 +219,11 @@ def _load_done_keys(out_path: str) -> set[tuple[int, int, int]]:
         return set()
 
 
-def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, seeds: list[int], method: str, out_path: str, eval_subset: int = None, num_clients_only: int = None):
-    x_test, y_test, s_test = load_test_data(dataset)
+def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, seeds: list[int], method: str, out_path: str, eval_subset: int = None, num_clients_only: int = None, sensitive_attr=None):
+    x_test, y_test, s_test = load_test_data(dataset, sensitive_attr)
+    gap = parse_gap_method(method)
+    if gap is not None and s_test is None:
+        raise SystemExit(f"[FATAL] {method} needs a sensitive attribute; {dataset} has none.")
 
     # Optional test-set subsampling for tractable GTG runtime. Deterministic
     # via fixed seed=42 so all (seed, method) runs see the same subset
@@ -197,9 +232,11 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
         try:
             from sklearn.model_selection import train_test_split
             y_arr = y_test.numpy() if hasattr(y_test, "numpy") else np.asarray(y_test)
+            # Gap methods stratify by group x label, so small groups keep their share.
+            strat = y_arr if gap is None else np.asarray(y_arr).astype(int) * 2 + np.asarray(s_test).astype(int)
             idx, _ = train_test_split(
                 np.arange(len(x_test)), train_size=eval_subset,
-                random_state=42, stratify=y_arr,
+                random_state=42, stratify=strat,
             )
             idx = np.sort(idx)
             x_test = tf.gather(x_test, idx) if hasattr(x_test, "numpy") else x_test[idx]
@@ -212,6 +249,14 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
             x_test = x_test[:eval_subset]; y_test = y_test[:eval_subset]
             if s_test is not None:
                 s_test = s_test[:eval_subset]
+
+    group_sizes = {}
+    if gap is not None:
+        # Written on every row: a gap measured on a small group is noisy, and the
+        # analysis needs the sizes to say how much a result could move by chance.
+        ia, ib = group_indices(s_test, y_test, gap[1])
+        group_sizes = {"group_a": sensitive_spec(dataset, sensitive_attr), "n_group_a": len(ia), "n_group_b": len(ib)}
+        print(f"[gap] {method}: group A ({group_sizes['group_a']}) n={len(ia)}, group B (everyone else) n={len(ib)}")
 
     header_written = os.path.exists(out_path) and os.path.getsize(out_path) > 0
     # Tallied so main() can exit non-zero on a sweep that produced nothing. The
@@ -261,6 +306,11 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
                 if (seed, num_clients, round_num) in done_keys:
                     continue
                 try:
+                    if gap is not None:
+                        # One seed per (seed, K, round): new gap GTG columns are reproducible
+                        # whatever the resume state or round order (AUDIT A6). Shipped
+                        # methods keep the old RNG stream on purpose.
+                        set_seed(seed * 10_000 + num_clients * 100 + round_num)
                     mia_splits = None
                     mia_cfg = None
                     if method in ("l1o_priv", "gtg_priv"):
@@ -295,6 +345,7 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
                             f"global_{method}": float(global_metric),
                             f"{method}_contribution": float(contribution),
                             "abs_contribution": float(abs(contribution)),
+                            **group_sizes,
                         })
 
                     # Flush to CSV after each round — crash-safe + frees memory
@@ -320,7 +371,7 @@ def main():
     # round orders — each writes its own CSV; merge by (round, num_clients,
     # client_id) at analysis time. Empty by default = standard filename.
     _out_suffix = os.environ.get("FLR_OUT_SUFFIX", "")
-    out = f"results_{args.dataset}_{args.seed}_{args.method}{_out_suffix}_{args.strategy}.csv"
+    out = f"results_{args.dataset}_{args.seed}_{args.method}{attr_tag(args.dataset, args.sensitive_attr)}{_out_suffix}_{args.strategy}.csv"
 
     rows_written, rounds_failed = evaluate_all(
         root_dir=root_dir,
@@ -332,6 +383,7 @@ def main():
         out_path=out,
         eval_subset=args.eval_subset,
         num_clients_only=args.num_clients,
+        sensitive_attr=args.sensitive_attr,
     )
 
     print(f"Results saved to {out}  ({rows_written} new rows, {rounds_failed} rounds failed)")

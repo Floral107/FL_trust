@@ -176,13 +176,15 @@ def load_data(
     df = dataset.data.copy()
     df["income"] = dataset.target
 
-    # 2. Build sensitive attribute S from raw columns
-    if sensitive_attr == "sex":
-        s = (df["sex"].str.strip() == "Female").astype(np.int32)
-    elif sensitive_attr == "race":
-        s = (df["race"].str.strip() == "White").astype(np.int32)
-    else:
-        raise ValueError(f"Unsupported sensitive_attr={sensitive_attr}")
+    # 2. Build sensitive attribute S (1 = group A) from a raw column. "column=value"
+    #    selects any column, e.g. "race=Black"; "sex" and "race" keep their original meaning.
+    spec = {"sex": "sex=Female", "race": "race=White"}.get(sensitive_attr, sensitive_attr)
+    col, _, val = spec.partition("=")
+    if not val or col not in df.columns:
+        raise ValueError(f"Unsupported sensitive_attr={sensitive_attr!r}: use 'column=value', e.g. 'race=Black'")
+    s = (df[col].astype(str).str.strip() == val).astype(np.int32)
+    if s.sum() == 0:
+        raise ValueError(f"sensitive_attr={sensitive_attr!r} matches no rows")
 
     # 3. Prepare features
     categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()

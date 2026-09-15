@@ -8,6 +8,7 @@ import tensorflow as tf
 from robustness_metric import load_client_models, calculate_robustness_score, aggregate_models
 from attack_metric import calculate_pgd_score, calculate_cw_score
 from fairness_metric import calculate_fairness_score
+from gap_metrics import parse as parse_gap_method, make_gap_value
 def _process_text(x):
     # Lazy import: hosts that only deploy *noniid app dirs have no imdb/ package.
     from imdb.imdb.task import process_text
@@ -109,7 +110,24 @@ def _loss_score(model, x_test, y_test, dataset):
     return float(loss_fn(y, preds).numpy())
 
 
-def _compute_global_metric(method, global_model, x_test, y_test, dataset, fairness_wrapper, privacy_value):
+def _gap_base_fn(metric, dataset):
+    """Per-group base metric for a direction-B gap utility: f(model, x_group, y_group)."""
+    if metric == "acc":
+        return lambda model, x, y: _accuracy_score(model, x, y, dataset)
+    if metric == "loss":
+        # The paper's loss utility e^(-mean CE): in [0, 1] and higher-is-better. A gap
+        # of raw CE is unbounded (1 - |dCE| can drop below 0), so it can't be used here.
+        return lambda model, x, y: float(np.exp(-_loss_score(model, x, y, dataset)))
+    if metric == "rel":
+        return lambda model, x, y: float(calculate_robustness_score(model, x, dataset))
+    if metric == "res":
+        return lambda model, x, y: float(calculate_pgd_score(model, x, dataset, y))
+    raise ValueError(f"Unsupported gap metric: {metric}")
+
+
+def _compute_global_metric(method, global_model, x_test, y_test, dataset, fairness_wrapper, privacy_value, gap_value=None):
+    if gap_value is not None:
+        return float(gap_value(global_model))
     if method in ("l1o_rob", "gtg_rob"):
         return float(calculate_robustness_score(global_model, x_test, dataset))
     # adv / adv_pgd: kept together — l1o_adv / gtg_adv are backward-compat PGD aliases
@@ -192,8 +210,16 @@ def evaluate_round(
     x_test_priv = _process_text(x_test) if "imdb" in dataset.lower() else x_test
     privacy_value = _build_privacy_value(method, x_test_priv, y_test, dataset, round_num, mia_seed, mia_splits, mia_config, reference_model=global_model)
 
+    # Direction B: 1 - |M(A) - M(B)| over the two sensitive groups (gap_metrics.py).
+    gap = parse_gap_method(method)
+    gap_value = None
+    if gap is not None:
+        if s_test is None:
+            raise ValueError(f"{method} needs a sensitive attribute, and {dataset} has none")
+        gap_value = make_gap_value(_gap_base_fn(gap[0], dataset), x_test, y_test, s_test, gap[1])
+
     try:
-        global_metric = _compute_global_metric(method, global_model, x_test, y_test, dataset, fairness_wrapper, privacy_value)
+        global_metric = _compute_global_metric(method, global_model, x_test, y_test, dataset, fairness_wrapper, privacy_value, gap_value)
         if global_metric is None:
             print(f"Unsupported method: {method}")
             return None, None
@@ -202,7 +228,7 @@ def evaluate_round(
         return None, None
 
     try:
-        metric_fun = _get_metric_fun(method, fairness_wrapper, privacy_value)
+        metric_fun = _get_metric_fun(method, fairness_wrapper, privacy_value, gap_value)
         x_eval = x_test_priv if method in ("l1o_priv", "gtg_priv") else x_test
         if method.startswith("l1o_"):
             global_val, contribs = l1o_evals(metric_fun, global_metric, x_eval, y_test, dataset, client_weights, global_model)
@@ -233,11 +259,15 @@ def evaluate_round(
         gc.collect()
 
 
-def _get_metric_fun(method: str, fairness_wrapper, privacy_value):
+def _get_metric_fun(method: str, fairness_wrapper, privacy_value, gap_value=None):
     """
     Returns f(model, X, dataset, y_test) -> float
     compatible with l1o_evals / gtg_evals
     """
+    # Gap utilities first: their group subsets are pre-sliced, and the suffix checks
+    # below must never see them (gap_metrics.py explains the _dp/_eop endings).
+    if gap_value is not None:
+        return lambda model, X, dataset, y_test: float(gap_value(model))
     if method.endswith("_rob"):
         return lambda model, X, dataset, y_test: float(calculate_robustness_score(model, X, dataset))
     # CW is tested before the generic _adv suffix so *_adv_cw doesn't fall into the PGD branch.

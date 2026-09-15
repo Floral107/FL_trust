@@ -224,6 +224,44 @@ def _partition_cache_path(partition_id: int, num_partitions: int) -> Path:
     return _DISK_CACHE_DIR / f"n{num_partitions}_p{partition_id}_tr{NUM_TRAIN_SAMPLES}_te{NUM_TEST_SAMPLES}.npz"
 
 
+def _attr_sidecar_path(cache_path: Path, attr: str) -> Path:
+    return cache_path.with_suffix(f".s-{attr}.npz")
+
+
+def _build_attr_sidecar(partition_id: int, num_partitions: int, attr: str, cache_path: Path):
+    """Store a non-default sensitive attribute next to the partition cache.
+
+    The cache holds only SENSITIVE_ATTR; before 2026-09-15 a cache hit silently
+    returned it for ANY requested attribute. Rebuild the attribute from the HF label
+    columns (no image decoding), repeating load_data's row selection and split, and
+    refuse to write it unless the rebuilt labels match the cached ones.
+    """
+    path = _attr_sidecar_path(cache_path, attr)
+    if path.exists():
+        return
+    global fds
+    if fds is None:
+        fds = FederatedDataset(
+            dataset="flwrlabs/celeba",
+            partitioners={"train": IidPartitioner(num_partitions=num_partitions)},
+        )
+    partition = fds.load_partition(partition_id, "train")
+    if len(partition) > 40000:  # load_data's stratified OOM-guard keep, same seed
+        y_all = np.asarray(partition[TARGET_ATTR], dtype=np.int32)
+        keep_idx, _ = train_test_split(np.arange(len(y_all)), train_size=40000, random_state=42, stratify=y_all)
+        partition = partition.select(sorted(keep_idx.tolist()))
+    y = np.asarray(partition[TARGET_ATTR], dtype=np.int32)
+    ref = np.asarray(partition[SENSITIVE_ATTR], dtype=np.int32)
+    a = np.asarray(partition[attr], dtype=np.int32)
+    tr, te = train_test_split(np.arange(len(y)), test_size=0.2, random_state=42, stratify=y)
+    tr, te = tr[:NUM_TRAIN_SAMPLES], te[:NUM_TEST_SAMPLES]
+    d = np.load(cache_path)
+    if not (np.array_equal(y[tr], d["y_train"]) and np.array_equal(y[te], d["y_test"])
+            and np.array_equal(ref[te], d["s_test"])):
+        raise RuntimeError(f"sensitive_attr={attr!r}: rebuilt split does not match {cache_path.name}")
+    np.savez_compressed(path, s_train=a[tr], s_test=a[te])
+
+
 def load_data(
     partition_id: int,
     num_partitions: int,
@@ -310,8 +348,8 @@ def load_data(
             # so we re-fetch the sensitive column here if a non-default name
             # was requested.
             images, y, s = _stream_partition_to_array(partition, IMG_SIZE)
-            if sensitive_attr != SENSITIVE_ATTR:
-                s = np.asarray(partition[sensitive_attr], dtype=np.int32)
+            # The cache always holds SENSITIVE_ATTR; any other attribute lives in a
+            # sidecar (_build_attr_sidecar), so a later cache hit can't mix them up.
             del partition; gc.collect()
 
             x_tr, x_te, y_tr, y_te, s_tr, s_te = train_test_split(
@@ -325,8 +363,12 @@ def load_data(
                 x_test=x_te[:NUM_TEST_SAMPLES],   y_test=y_te[:NUM_TEST_SAMPLES],
                 s_train=s_tr[:NUM_TRAIN_SAMPLES],  s_test=s_te[:NUM_TEST_SAMPLES],
             )
+        if return_sensitive and sensitive_attr != SENSITIVE_ATTR:
+            _build_attr_sidecar(partition_id, num_partitions, sensitive_attr, cache_path)
 
     d = np.load(cache_path)
+    # s_* come from the attribute sidecar unless the paper's attribute was asked for
+    src = np.load(_attr_sidecar_path(cache_path, sensitive_attr)) if return_sensitive and sensitive_attr != SENSITIVE_ATTR else d
     x_test  = tf.convert_to_tensor(d["x_test"],  dtype=tf.float32)
     y_test  = tf.convert_to_tensor(d["y_test"],  dtype=tf.int32)
     if test_only:
@@ -335,9 +377,9 @@ def load_data(
     else:
         x_train = tf.convert_to_tensor(d["x_train"], dtype=tf.float32)
         y_train = tf.convert_to_tensor(d["y_train"], dtype=tf.int32)
-        s_train = d["s_train"] if return_sensitive else None
+        s_train = src["s_train"] if return_sensitive else None
     if return_sensitive:
-        return x_train, y_train, x_test, y_test, s_train, d["s_test"]
+        return x_train, y_train, x_test, y_test, s_train, src["s_test"]
     return x_train, y_train, x_test, y_test
 
 

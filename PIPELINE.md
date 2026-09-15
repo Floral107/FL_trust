@@ -132,3 +132,37 @@ under-covered cell fail the gate.
 As of 2026-09-01 there are **17 under-covered cells**, the worst being
 `results_celeba_l1o.csv` K=4, where `acc` / `loss` / `fair` / `fair_eo` are each
 backed by **1 of 5 seeds** yet reported as mean +/- std.
+
+## Direction B: group-gap utilities (branch `direction-b`)
+
+`u = 1 − |M(A) − M(B)|` for `M ∈ {acc, loss, rel, res}` (priv parked until reviewer
+feedback), scored by the same LOO/GTG code. Methods:
+`{l1o,gtg}_gap_{acc,loss,rel,res}_{dp,eop}`, where `dp` uses every test sample of a
+group and `eop` only its true positives (y = 1). Logic lives in `Code/gap_metrics.py`
+(check: `python Code/test_gap_metrics.py`), routed through `cont_evals.evaluate_round`.
+
+- **Names end in `_dp` / `_eop` on purpose.** `evaluate_round` negates contributions,
+  and GTG minimises, for any name ending in `_loss`; gap utilities are higher-is-better.
+- **Loss** enters per group as the paper's loss utility `e^(−mean CE)`; a gap of raw CE
+  is unbounded.
+- **Group A** is `--sensitive_attr` as `column=value`, by default female on both datasets
+  (ADULT `sex=Female`, CelebA `Male=0`). The paper's CelebA runs coded s = Male; every
+  fairness and gap score is symmetric in A and B, so no number depends on the coding. A
+  non-default attribute writes `results_<ds>_<seed>_<method>_s-<attr>_fedavg.csv`, never
+  the default file, and `fold_in.py` skips those names.
+- **CelebA attributes other than `Male`** come from a sidecar next to the partition cache
+  (`*.s-<attr>.npz`), rebuilt from the HF label columns and checked against the cached
+  labels before it is written. The cache itself only stores `Male` (before 2026-09-15 a
+  cache hit returned `Male` for any requested attribute). Building a sidecar needs the HF
+  dataset: point `HF_HOME` / `HF_DATASETS_CACHE` at the repo-root `.hf_cache`; offline works.
+- **Every gap row** carries `group_a`, `n_group_a`, `n_group_b`. Gap methods reseed per
+  (seed, K, round), so their GTG columns reproduce on demand (AUDIT A6); shipped methods
+  keep the old RNG stream.
+- **Run:** job lines `<ds> <partition> <K> <seed> <method> [column=value]` in
+  `_direction_b/jobs_*.txt`, then from the repo root
+  `OUT_DIR=../_direction_b bash _fills_20260914/run_fills.sh _direction_b/jobs_X.txt`.
+  Fold in with `cd _direction_b && python ../_fills_20260914/fold_in.py --apply`, which
+  creates the new gap columns and stays NaN-only.
+- **GTG sanity check:** `seed=42 python Code/gtg_check.py --dataset adultnoniid --K 4 --seed 42`
+  compares exact Shapley (all 2^K coalitions) with GTG, the saved global model with the
+  plain average coalitions use, and scores a duplicated and a planted group-skewed client.
