@@ -683,6 +683,42 @@ so those no longer reproduce the shipped numbers bit for bit — reproduce them 
 
 ---
 
+### A38. `--noise_samples` was parsed and then ignored; reliability always ran at L=100
+`robustness.py:138-141` vs `robustness_metric.py:119,122,182,188`
+
+Three layers that each looked correct and together did nothing:
+
+1. `robustness.py` defines `--noise_samples`, and `args.noise_samples` is then read **nowhere** in the file.
+2. `calculate_image_robustness` reads `FLR_NOISE_SAMPLES` from the environment — which nothing ever set.
+3. `calculate_tabular_robustness` did not read it at all, so even exporting the variable by hand changed
+   nothing on ADULT.
+
+So `L` was pinned at the default 100 for every dataset, on every run, always. Both docstrings say
+"Honors FLR_NOISE_SAMPLES env var (set by robustness.py --noise_samples)", describing a hand-off that did
+not exist, and the flag's own help text advertises "30 gives ~3× speedup with modest CI widening" — a
+speedup that was unreachable through the documented interface.
+
+**Failure:** not a wrong number. Every reliability value ever produced used L=100, which is what the paper
+describes, so nothing shipped is affected. The damage is an inert tuning knob: a sweep launched with
+`--noise_samples 30` silently costs 3× what the operator budgeted and yields L=100 numbers that the
+operator will label L=30. This is the same class as A8 — a parameter that reads as tunable and governs
+nothing — and exactly what a reviewer asks about.
+
+**Fixed 2026-09-16 on `direction-b`** (`68bde74` makes the tabular path honour the env var, `b72ba9a` makes
+`main()` set it from the flag). Default behaviour is unchanged at L=100; only an explicit flag or env var
+now takes effect. Verified end to end on adultnoniid K=4 seed 42 round 10, `l1o_rob`: `--noise_samples 5`
+finishes in 12 s against a ~4 min reference at L=100, rc=0, sane values.
+
+**Why the knob is worth having, measured** (`_direction_b/rel_L_sweep.py`, round-10 global model,
+8-32 repetitions per cell): the gap-utility estimator noise at L=100 is 0.00017 (`dp`) and 0.00060 (`eop`),
+against a per-client contribution spread of 0.003-0.007 — so reliability is resolvable with room to spare,
+and its weak client discrimination is a real property, not a measurement artefact. Noise follows
+~1/sqrt(L·N). At L=20 the `dp` gap-noise is 0.00034, still ~10× below the signal, at 3.9 s per evaluation
+against 20.0 s — about 5× less compute. `eop` groups are small (A = 359 samples) and should stay at
+L=50-100.
+
+---
+
 ## Suggested order of attack
 
 1. **A1 + A2 + A4** together — one change of policy (`nan` instead of `0.0`, non-zero
@@ -767,6 +803,16 @@ See A6 above: 21/40 contributions move by up to 3.9e-3 on values ranging
 ### A30 — REALIZED. Environment pinning, not a code fix.
 
 max|diff| 7.6e-3 on a clean-room ADULT re-run; see A30.
+
+### A38 — LATENT, not realized. No re-run needed.
+
+The flag never took effect, so every shipped reliability number was produced at the
+default L=100 — the value the paper describes. The defect is an inert knob, not a wrong
+`L`. Nothing in `data/combo/` or `data/{bl,st,dy,et}/` needs recomputing.
+
+It becomes live the moment someone uses the now-working flag, so the measured noise
+budget belongs with it: at L=100 the gap-utility noise is 0.00017 (`dp`) / 0.00060 (`eop`)
+against a 0.003-0.007 per-client signal; L=20 is safe for `dp` groups, L=50-100 for `eop`.
 
 ---
 
