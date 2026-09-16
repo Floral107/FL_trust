@@ -51,11 +51,21 @@ def _take(x, idx):
 def make_gap_value(metric_fn, x, y, s, filt):
     """model -> 1 - |M(A) - M(B)|, with metric_fn(model, x_group, y_group) -> float.
 
+    The returned function also has .parts(model) -> (M(A), M(B)): a gap alone can't say
+    whether groups got equal because one improved or because the other got worse.
     Groups are sliced once here, not once per coalition. An empty group gives NaN,
     never a number: a silent 0 or 1 would read as a real measurement in LOO/GTG.
     """
     ia, ib = group_indices(s, y, filt)
     if len(ia) == 0 or len(ib) == 0:
-        return lambda model: float("nan")
-    xa, ya, xb, yb = _take(x, ia), _take(y, ia), _take(x, ib), _take(y, ib)
-    return lambda model: 1.0 - abs(float(metric_fn(model, xa, ya)) - float(metric_fn(model, xb, yb)))
+        parts = lambda model: (float("nan"), float("nan"))
+    else:
+        xa, ya, xb, yb = _take(x, ia), _take(y, ia), _take(x, ib), _take(y, ib)
+        parts = lambda model: (float(metric_fn(model, xa, ya)), float(metric_fn(model, xb, yb)))
+
+    def gap_value(model):
+        m_a, m_b = parts(model)
+        return 1.0 - abs(m_a - m_b)
+
+    gap_value.parts = parts
+    return gap_value

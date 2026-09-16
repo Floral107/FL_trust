@@ -1,6 +1,7 @@
 # TensorFlow-compatible GTGShapley implementation
 
 import copy
+import itertools
 import math
 import numpy as np
 # tensorflow imported lazily — the class itself only needs numpy, so we
@@ -72,8 +73,11 @@ class GTGShapley:
         self.utility_function = utility_function
 
     def evaluate_subset(self, subset: List[int]) -> float:
-        if not subset:
-            return float(self.utility_function([]))
+        # The empty coalition is cached like any other (AUDIT A33): it was re-scored in
+        # all 30 permutations, which for deterministic metrics gave the same number 30
+        # times and for noisy ones (rel) a different baseline per permutation. Noisy
+        # metrics therefore consume fewer random draws now: gtg_rob and in-loop rel scores
+        # don't reproduce the shipped ones bit for bit (use master for those).
         subset_key = tuple(sorted(subset))
         if subset_key in self.evaluated_subsets:
             return float(self.evaluated_subsets[subset_key])
@@ -249,5 +253,46 @@ class GTGShapley:
             for i in range(num_players)
         }
         return normalized
+
+
+def shapley_values(utility: Callable, num_players: int, max_exact: int = 6, min_perms: int = 30) -> np.ndarray:
+    """Shapley values of a coalition game, without GTG's truncation and best-subset step.
+
+    GTGShapley stays as the paper ran it, but even its estimate before the best-subset
+    step is not a clean Shapley value (AUDIT A37): the within-permutation eps truncation
+    zeroes a whole round whose clients cancel out (u(all) ~= u(empty)), and cycling the
+    first player through a fixed 30 permutations favours low-index clients whenever 30 is
+    not a multiple of K (clients 0-9 go first twice as often as 10-19 at K=20).
+
+    Up to max_exact players: exact, over all 2^n coalitions (at K=4 fewer evaluations than
+    GTG's 30 permutations). Above: permutation sampling with no truncation and every player
+    first equally often, n * ceil(max(min_perms, 2n) / n) permutations.
+    utility(sorted tuple of players) may return a float or a numpy vector, giving one row
+    of values per player. Cache it in the caller: coalitions repeat.
+    """
+    empty = np.asarray(utility(()), dtype=float)
+    phi = np.zeros((num_players,) + empty.shape)
+    if num_players <= max_exact:
+        f = math.factorial
+        for i in range(num_players):
+            others = [j for j in range(num_players) if j != i]
+            for r in range(num_players):
+                w = f(r) * f(num_players - r - 1) / f(num_players)
+                for S in itertools.combinations(others, r):
+                    with_i = np.asarray(utility(tuple(sorted(S + (i,)))), dtype=float)
+                    phi[i] += w * (with_i - np.asarray(utility(S), dtype=float))
+        return phi
+    n_perm = num_players * math.ceil(max(min_perms, 2 * num_players) / num_players)
+    for p in range(n_perm):
+        first = p % num_players
+        rest = [q for q in range(num_players) if q != first]
+        np.random.shuffle(rest)
+        prev, prefix = empty, []
+        for q in [first] + rest:
+            prefix.append(q)
+            cur = np.asarray(utility(tuple(sorted(prefix))), dtype=float)
+            phi[q] += cur - prev
+            prev = cur
+    return phi / n_perm
 
 

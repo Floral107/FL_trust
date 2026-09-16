@@ -155,14 +155,39 @@ group and `eop` only its true positives (y = 1). Logic lives in `Code/gap_metric
   labels before it is written. The cache itself only stores `Male` (before 2026-09-15 a
   cache hit returned `Male` for any requested attribute). Building a sidecar needs the HF
   dataset: point `HF_HOME` / `HF_DATASETS_CACHE` at the repo-root `.hf_cache`; offline works.
-- **Every gap row** carries `group_a`, `n_group_a`, `n_group_b`. Gap methods reseed per
-  (seed, K, round), so their GTG columns reproduce on demand (AUDIT A6); shipped methods
-  keep the old RNG stream.
+- **Coalitions are averaged the way the server averaged that round** (AUDIT A36): FedAvg's
+  per-client coefficients are recovered from the checkpoints
+  (`weighted_utils.recover_fedavg_coeffs`) and renormalised per coalition. Every row records
+  `coalition_avg`: `size` (weighted), `equal` (equal partitions, plain mean, as in the
+  shipped runs) or `fallback` (coefficients not recoverable, plain mean, and LOO then scores
+  V(All) as that plain mean too).
+- **Two GTG columns** (AUDIT A37): `<method>_contribution` is GTG exactly as the paper ran it
+  (truncation, then only the best coalition keeps a value), while `<method>_shapley` is the
+  Shapley value of the same coalition game without those steps — exact for K ≤ 6, otherwise
+  permutation sampling with no truncation and every client first equally often
+  (`gtg_shap.shapley_values`). Direction B reports `_shapley`; `_contribution` stays for
+  comparison with the paper.
+- **Gap rows** also carry `group_a`, `n_group_a`, `n_group_b`, each group's value on the
+  global model (`global_<method>_m_a` / `_m_b`) and each client's attribution of those two
+  values (`<method>_shapley_m_a/_m_b` for GTG, `<method>_contribution_m_a/_m_b` for LOO).
+  A narrower gap means little until you know whether the worse group rose or the better one
+  fell, and these cost no extra model evaluations.
+- **Resilience on a group with no clean-correct sample is NaN**, not the 0.0 that PGD
+  returns: inside a gap that would read as a perfectly fair coalition.
+- **Reproducibility.** Gap methods reseed per (seed, K, round) (AUDIT A6). Other methods are
+  not reseeded, and the cached empty coalition (A33) changes how many random draws `rel`
+  consumes, so `gtg_rob` and in-loop `rel` scores no longer reproduce the shipped ones bit
+  for bit — reproduce those from `master`.
 - **Run:** job lines `<ds> <partition> <K> <seed> <method> [column=value]` in
   `_direction_b/jobs_*.txt`, then from the repo root
   `OUT_DIR=../_direction_b bash _fills_20260914/run_fills.sh _direction_b/jobs_X.txt`.
-  Fold in with `cd _direction_b && python ../_fills_20260914/fold_in.py --apply`, which
-  creates the new gap columns and stays NaN-only.
+  Fold the fixed scorer's output in with
+  `cd _direction_b && FLR_COMBO=../Code/data/combo_v2 python ../_fills_20260914/fold_in.py --apply`:
+  `FLR_COMBO` must be explicit, files/rows/columns are created as runs arrive, cells are only
+  ever filled, and a kept cell whose incoming value differs is reported. Without `FLR_COMBO`
+  the target is the shipped `data/combo`, which refuses fixed-scorer output (and vice versa).
 - **GTG sanity check:** `seed=42 python Code/gtg_check.py --dataset adultnoniid --K 4 --seed 42`
-  compares exact Shapley (all 2^K coalitions) with GTG, the saved global model with the
-  plain average coalitions use, and scores a duplicated and a planted group-skewed client.
+  compares an independent exact Shapley enumeration with `_shapley` and `_contribution`,
+  checks the recovered coefficients against the clients' real training sizes, runs
+  `evaluate_round` end to end, and scores a duplicated and a planted group-skewed client.
+  At K > 6 pass `--ref_perms N` to compare against a long sampling reference instead.

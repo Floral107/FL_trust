@@ -13,6 +13,10 @@ export TF_CPP_MIN_LOG_LEVEL=3
 while read -r ds part K sd m attr; do
   [ -z "${ds:-}" ] && continue
   case "$ds" in \#*) continue;; esac
+  case "$ds:${attr:-}" in   # mirror robustness.sensitive_spec, so the tag below matches its output name
+    adult*:sex|adult*:sex=Female|celeba*:Male=0) attr="";;
+    adult*:race) attr="race=White";;
+  esac
   tag=${attr:+_s-${attr//[^A-Za-z0-9]/-}}   # the same tag robustness.py adds to the output name
   log="fill_${ds}_${K}_${sd}_${m}${tag}.log"
   echo "[$(date -u +%H:%M:%S)] START $ds K=$K seed=$sd $m${attr:+ attr=$attr}" >> fills.log

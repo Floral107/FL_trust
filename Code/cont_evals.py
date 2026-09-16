@@ -9,11 +9,12 @@ from robustness_metric import load_client_models, calculate_robustness_score, ag
 from attack_metric import calculate_pgd_score, calculate_cw_score
 from fairness_metric import calculate_fairness_score
 from gap_metrics import parse as parse_gap_method, make_gap_value
+from weighted_utils import fedavg_aggregate, recover_fedavg_coeffs
 def _process_text(x):
     # Lazy import: hosts that only deploy *noniid app dirs have no imdb/ package.
     from imdb.imdb.task import process_text
     return process_text(x)
-from gtg_shap import GTGShapley
+from gtg_shap import GTGShapley, shapley_values
 
 
 from privacy_metric import (
@@ -121,13 +122,14 @@ def _gap_base_fn(metric, dataset):
     if metric == "rel":
         return lambda model, x, y: float(calculate_robustness_score(model, x, dataset))
     if metric == "res":
-        return lambda model, x, y: float(calculate_pgd_score(model, x, dataset, y))
+        # PGD scores a group with no clean-correct sample as 0.0 (attack_metric). In a gap
+        # that reads as a real, extreme value; the group's resilience is undefined -> NaN.
+        return lambda model, x, y: (float("nan") if _accuracy_score(model, x, y, dataset) == 0.0
+                                    else float(calculate_pgd_score(model, x, dataset, y)))
     raise ValueError(f"Unsupported gap metric: {metric}")
 
 
-def _compute_global_metric(method, global_model, x_test, y_test, dataset, fairness_wrapper, privacy_value, gap_value=None):
-    if gap_value is not None:
-        return float(gap_value(global_model))
+def _compute_global_metric(method, global_model, x_test, y_test, dataset, fairness_wrapper, privacy_value):
     if method in ("l1o_rob", "gtg_rob"):
         return float(calculate_robustness_score(global_model, x_test, dataset))
     # adv / adv_pgd: kept together — l1o_adv / gtg_adv are backward-compat PGD aliases
@@ -148,6 +150,50 @@ def _compute_global_metric(method, global_model, x_test, y_test, dataset, fairne
     return None
 
 
+def _coalition_coeffs(model_dir, round_num, weights_list, global_model):
+    """(coefficients, label) for averaging coalitions the way the server averaged the round.
+
+    FedAvg weights clients by training-set size; the Dirichlet non-IID partitions are far
+    from equal, and a plain mean scored every coalition against a model the server never
+    built (AUDIT A36). The coefficients are recovered from the checkpoints themselves.
+    Label "size": weighted. "equal": equal partitions, plain mean (the shipped coalitions).
+    "fallback": the checkpoints don't pin them down; plain mean, and LOO then also scores
+    V(All) as that plain mean, so both sides of its difference share one aggregation.
+    """
+    prev_path = os.path.join(model_dir, f"global_model_round_{round_num - 1}.keras")
+    if not os.path.exists(prev_path):
+        print(f"[agg] round {round_num}: no previous global model, coalitions use a plain mean")
+        return None, "fallback"
+    prev = tf.keras.models.load_model(prev_path, compile=False)
+    coeffs = recover_fedavg_coeffs(weights_list, global_model.get_weights(), prev.get_weights())
+    del prev
+    if coeffs is None:
+        print(f"[agg] round {round_num}: FedAvg coefficients not recoverable from the checkpoints, coalitions use a plain mean")
+        return None, "fallback"
+    if np.ptp(coeffs) <= 1e-4:
+        return None, "equal"
+    return list(coeffs), "size"
+
+
+def _average(weights, coeffs=None):
+    """FedAvg over a coalition: size-weighted like the server when coeffs is given, else a plain mean."""
+    return aggregate_models(weights) if coeffs is None else fedavg_aggregate(weights, coeffs)
+
+
+def _values(metric_fun, model, x_test, dataset, y_test):
+    """Utility of one model as an array: [u], or [gap, M(A), M(B)] for a gap utility."""
+    if hasattr(metric_fun, "parts"):
+        m_a, m_b = metric_fun.parts(model)
+        return np.array([1.0 - abs(m_a - m_b), m_a, m_b])
+    return np.array([float(metric_fun(model, x_test, dataset, y_test))])
+
+
+def _model_with(template, weights):
+    model = tf.keras.models.clone_model(template)
+    model.set_weights(weights)
+    return model
+
+
 def evaluate_round(
     model_dir,
     num_clients,
@@ -164,7 +210,11 @@ def evaluate_round(
 ):
     """
     Returns:
-        (global_metric, contributions_dict)
+        (global_metric, contributions_dict, info) — info carries "coalition_avg"
+        ("size" / "equal" / "fallback"); for GTG "shapley" (the coalition game's Shapley
+        value, gtg_shap.shapley_values); for gap methods "global_m_a" / "global_m_b" and
+        each client's M(A) / M(B) attribution ("shapley_m_a/_m_b" or "contribution_m_a/_m_b").
+        (None, None, None) when the round can't be scored.
 
     Privacy (l1o_priv / gtg_priv):
       - coalition-model is cloned and fine-tuned on a fixed member split of TEST
@@ -174,18 +224,18 @@ def evaluate_round(
     global_model_path = os.path.join(model_dir, f"global_model_round_{round_num}.keras")
     if not os.path.exists(global_model_path):
         print(f"Global model for round {round_num} not found: {global_model_path}")
-        return None, None
+        return None, None, None
 
     try:
         global_model = tf.keras.models.load_model(global_model_path)
     except Exception as e:
         print(f"Failed to load global model: {e}")
-        return None, None
+        return None, None, None
 
     client_models = load_client_models(model_dir, num_clients, round_num)
     if not client_models:
         print(f"No client models found in {model_dir} for round {round_num}")
-        return None, None
+        return None, None, None
 
     # Extract weights immediately, then free the Keras model objects.
     # For GTG/privacy we only need numpy weight arrays, not full models.
@@ -218,29 +268,44 @@ def evaluate_round(
             raise ValueError(f"{method} needs a sensitive attribute, and {dataset} has none")
         gap_value = make_gap_value(_gap_base_fn(gap[0], dataset), x_test, y_test, s_test, gap[1])
 
+    info = {}
     try:
-        global_metric = _compute_global_metric(method, global_model, x_test, y_test, dataset, fairness_wrapper, privacy_value, gap_value)
+        if gap_value is not None:
+            m_a, m_b = gap_value.parts(global_model)  # one evaluation gives the gap and both group values
+            global_metric = 1.0 - abs(m_a - m_b)
+            info.update(global_m_a=m_a, global_m_b=m_b)
+        else:
+            global_metric = _compute_global_metric(method, global_model, x_test, y_test, dataset, fairness_wrapper, privacy_value)
         if global_metric is None:
             print(f"Unsupported method: {method}")
-            return None, None
+            return None, None, None
     except Exception as e:
         print(f"Error computing global metric ({method}): {e}")
-        return None, None
+        return None, None, None
 
     try:
+        coeff_list, info["coalition_avg"] = _coalition_coeffs(
+            model_dir, round_num, [client_weights[c] for c in client_id_list], global_model)
+        coeffs = None if coeff_list is None else dict(zip(client_id_list, coeff_list))
         metric_fun = _get_metric_fun(method, fairness_wrapper, privacy_value, gap_value)
         x_eval = x_test_priv if method in ("l1o_priv", "gtg_priv") else x_test
         if method.startswith("l1o_"):
-            global_val, contribs = l1o_evals(metric_fun, global_metric, x_eval, y_test, dataset, client_weights, global_model)
+            all_values = np.array([global_metric] + ([m_a, m_b] if gap_value is not None else []))
+            if info["coalition_avg"] == "fallback":
+                # The saved global isn't the plain mean these coalitions use (A36): score V(All)
+                # as that plain mean too, so both sides of the difference share one aggregation.
+                all_values = _values(metric_fun, _model_with(global_model, _average(list(client_weights.values()))),
+                                     x_eval, dataset, y_test)
+            contribs, extras = l1o_evals(metric_fun, all_values, x_eval, y_test, dataset, client_weights, global_model, coeffs=coeffs)
         elif method.startswith("gtg_"):
             # loss is a lower-is-better metric: GTG-Shapley best-subset selection
             # must minimize (loss_flag=True), else it keeps the worst clients and
             # zeros the good ones. Env toggle FLR_GTG_LOSSFLAG=0 reproduces the
             # old (incorrect) behavior for A/B comparison.
             gtg_loss_flag = method.endswith("_loss") and os.environ.get("FLR_GTG_LOSSFLAG", "1") != "0"
-            global_val, contribs = gtg_evals(metric_fun, model_dir, num_clients, x_eval, y_test, round_num, dataset, client_weights, index_to_client_id, global_metric, loss_flag=gtg_loss_flag)
+            contribs, extras = gtg_evals(metric_fun, model_dir, num_clients, x_eval, y_test, round_num, dataset, client_weights, index_to_client_id, loss_flag=gtg_loss_flag, coeffs=coeffs)
         else:
-            return None, None
+            return None, None, None
         # CANONICAL SIGN CONVENTION: contribution values are higher=better for
         # EVERY metric. Loss utilities are evaluated raw (lower=better), so the
         # marginal contributions come out inverted — negate them HERE, the single
@@ -251,7 +316,9 @@ def evaluate_round(
         # double-flip mess); sanity_gate.py enforces the convention on data/combo.
         if method.endswith("_loss") and contribs is not None:
             contribs = {k: -v for k, v in contribs.items()}
-        return global_val, contribs
+            extras = {name: {k: -v for k, v in vals.items()} for name, vals in extras.items()}
+        info.update(extras)
+        return global_metric, contribs, info
     finally:
         del global_model
         gc.collect()
@@ -267,7 +334,9 @@ def _get_metric_fun(method: str, fairness_wrapper, privacy_value, gap_value=None
     # Gap utilities first: their group subsets are pre-sliced, and the suffix checks
     # below must never see them (gap_metrics.py explains the _dp/_eop endings).
     if gap_value is not None:
-        return lambda model, X, dataset, y_test: float(gap_value(model))
+        fun = lambda model, X, dataset, y_test: float(gap_value(model))
+        fun.parts = gap_value.parts  # lets LOO/GTG attribute M(A) and M(B) from the same evaluations
+        return fun
     if method.endswith("_rob"):
         return lambda model, X, dataset, y_test: float(calculate_robustness_score(model, X, dataset))
     # CW is tested before the generic _adv suffix so *_adv_cw doesn't fall into the PGD branch.
@@ -290,8 +359,14 @@ def _get_metric_fun(method: str, fairness_wrapper, privacy_value, gap_value=None
     raise ValueError(f"Unsupported method: {method}")
 
 
-def l1o_evals(metric_fun, global_metric, x_test, y_test, dataset, client_weights, global_model):
-    contributions = {}
+def l1o_evals(metric_fun, all_values, x_test, y_test, dataset, client_weights, global_model, coeffs=None):
+    """LOO: V(All) - V(All\\i) for every client, with all_values = V(All) as _values returns it.
+
+    coeffs: FedAvg coefficient per client id (see _coalition_coeffs), None for a plain mean.
+    Returns (contributions, extras); for a gap utility extras also holds the same
+    differences of M(A) and M(B) ("contribution_m_a" / "contribution_m_b").
+    """
+    contributions, diffs = {}, {}
 
     # keep old compile behavior for safety (PGD / etc.)
     loss_fn_name = "binary_crossentropy" if "adult" in dataset.lower() else "sparse_categorical_crossentropy"
@@ -305,14 +380,15 @@ def l1o_evals(metric_fun, global_metric, x_test, y_test, dataset, client_weights
 
     try:
         for client_id in client_weights.keys():
-            remaining_weights = [client_weights[cid] for cid in client_weights if cid != client_id]
-            if not remaining_weights:
+            others = [cid for cid in client_weights if cid != client_id]
+            if not others:
                 continue
 
             try:
-                temp_model.set_weights(aggregate_models(remaining_weights))
-                without_i = float(metric_fun(temp_model, x_test, dataset, y_test))
-                contributions[client_id] = float(global_metric - without_i)  # V(All) - V(All\i)
+                temp_model.set_weights(_average([client_weights[c] for c in others],
+                                                [coeffs[c] for c in others] if coeffs else None))
+                diffs[client_id] = all_values - _values(metric_fun, temp_model, x_test, dataset, y_test)  # V(All) - V(All\i)
+                contributions[client_id] = float(diffs[client_id][0])
             except Exception as e:
                 print(f"Error in client {client_id} LOO calc ({dataset}): {e}")
     finally:
@@ -322,11 +398,23 @@ def l1o_evals(metric_fun, global_metric, x_test, y_test, dataset, client_weights
             pass
         gc.collect()
 
-    return float(global_metric), contributions
+    extras = {}
+    if len(all_values) == 3:
+        extras = {"contribution_m_a": {c: float(d[1]) for c, d in diffs.items()},
+                  "contribution_m_b": {c: float(d[2]) for c, d in diffs.items()}}
+    return contributions, extras
 
 
 def gtg_evals(metric_fun, model_dir, num_clients, x_test, y_test, round_num,
-              dataset, client_weights, index_to_client_id, global_metric, loss_flag=False):
+              dataset, client_weights, index_to_client_id, loss_flag=False, coeffs=None):
+    """Returns (contributions, extras).
+
+    contributions: GTG-Shapley with its truncation and best-subset step, as the paper ran it.
+    extras["shapley"]: the Shapley value of the same coalition game without them
+    (gtg_shap.shapley_values, AUDIT A37), plus "shapley_m_a" / "shapley_m_b" for gap
+    utilities. Both passes share one cache, so no coalition is evaluated twice.
+    coeffs: FedAvg coefficient per client id, None for a plain mean.
+    """
 
     rounds_to_load = [r for r in {round_num - 1, round_num} if r >= 0]
     loaded_models = load_global_models(model_dir, rounds_to_load, dataset)
@@ -334,30 +422,37 @@ def gtg_evals(metric_fun, model_dir, num_clients, x_test, y_test, round_num,
     prev_model = loaded_models.get(round_num - 1, loaded_models[round_num])
     eval_model = tf.keras.models.clone_model(loaded_models[round_num])
 
-    def utility_function(subset):
-        try:
-            if len(subset) == 0:
-                return float(metric_fun(prev_model, x_test, dataset, y_test))
+    cache = {}
 
-            selected_weights = [client_weights[index_to_client_id[i]] for i in subset]
-            eval_model.set_weights(aggregate_models(selected_weights))
-            return float(metric_fun(eval_model, x_test, dataset, y_test))
-
-        except Exception as e:
-            # NaN, never 0.0. A 0.0 utility is indistinguishable from a real
-            # measurement, and one poisoned coalition enters ~30 marginal
-            # differences, silently reshaping EVERY player's Shapley value.
-            # NaN propagates to the whole round instead, which is the truth.
-            print(f"Error in subset {subset} utility ({dataset}): {e}")
-            return float("nan")
+    def game(subset):
+        key = tuple(sorted(subset))
+        if key not in cache:
+            try:
+                if key:
+                    ids = [index_to_client_id[i] for i in key]
+                    eval_model.set_weights(_average([client_weights[c] for c in ids],
+                                                    [coeffs[c] for c in ids] if coeffs else None))
+                cache[key] = _values(metric_fun, eval_model if key else prev_model, x_test, dataset, y_test)
+            except Exception as e:
+                # NaN, never 0.0. A 0.0 utility is indistinguishable from a real
+                # measurement, and one poisoned coalition enters ~30 marginal
+                # differences, silently reshaping EVERY player's Shapley value.
+                # NaN propagates to the whole round instead, which is the truth.
+                print(f"Error in subset {subset} utility ({dataset}): {e}")
+                cache[key] = np.full(3 if hasattr(metric_fun, "parts") else 1, np.nan)
+        return cache[key]
 
     gtg = GTGShapley(num_players=num_clients, loss_flag=loss_flag)
-    gtg.set_utility_function(utility_function)
+    gtg.set_utility_function(lambda subset: float(game(subset)[0]))
 
     try:
         vals = gtg.compute(round_num=round_num)
         contributions = {index_to_client_id[i]: float(vals[i]) for i in range(gtg.num_players)}
-        return float(global_metric), contributions
+        phi = shapley_values(game, gtg.num_players)
+        names = ("shapley", "shapley_m_a", "shapley_m_b")[:phi.shape[1]]
+        extras = {name: {index_to_client_id[i]: float(phi[i, col]) for i in range(gtg.num_players)}
+                  for col, name in enumerate(names)}
+        return contributions, extras
 
     finally:
         try:

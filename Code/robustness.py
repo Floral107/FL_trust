@@ -308,8 +308,9 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
                 try:
                     if gap is not None:
                         # One seed per (seed, K, round): new gap GTG columns are reproducible
-                        # whatever the resume state or round order (AUDIT A6). Shipped
-                        # methods keep the old RNG stream on purpose.
+                        # whatever the resume state or round order (AUDIT A6). Other methods
+                        # aren't reseeded; reproduce shipped numbers from master, since the A33
+                        # empty-coalition cache changes how many random draws rel consumes.
                         set_seed(seed * 10_000 + num_clients * 100 + round_num)
                     mia_splits = None
                     mia_cfg = None
@@ -320,7 +321,7 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
                         )
                         mia_cfg = privacy_config_for_dataset(dataset)
 
-                    global_metric, contributions = evaluate_round(
+                    global_metric, contributions, info = evaluate_round(
                         exp_dir, num_clients,
                         x_test, y_test, s_test,
                         round_num, dataset,
@@ -333,6 +334,12 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
                     if global_metric is None or contributions is None:
                         continue
 
+                    # Per-round extras: how coalitions were averaged (AUDIT A36) and, for gap
+                    # methods, each group's value on the global model.
+                    extra = {"coalition_avg": info["coalition_avg"]}
+                    if "global_m_a" in info:
+                        extra[f"global_{method}_m_a"] = info["global_m_a"]
+                        extra[f"global_{method}_m_b"] = info["global_m_b"]
                     rows = []
                     for client_id, contribution in contributions.items():
                         rows.append({
@@ -345,11 +352,20 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
                             f"global_{method}": float(global_metric),
                             f"{method}_contribution": float(contribution),
                             "abs_contribution": float(abs(contribution)),
+                            # Shapley value without GTG's truncation/best-subset step (AUDIT A37) and,
+                            # for gap methods, each client's attribution of M(A) and M(B) separately
+                            **{f"{method}_{name}": info[name].get(client_id, float("nan"))
+                               for name in ("shapley", "shapley_m_a", "shapley_m_b", "contribution_m_a", "contribution_m_b")
+                               if info.get(name)},
                             **group_sizes,
+                            **extra,
                         })
 
                     # Flush to CSV after each round — crash-safe + frees memory
                     chunk = pd.DataFrame(rows)
+                    if header_written and list(pd.read_csv(out_path, nrows=0).columns) != list(chunk.columns):
+                        raise SystemExit(f"[FATAL] {out_path} has different columns (written by older code?); "
+                                         f"score into a fresh output directory instead of appending to it.")
                     chunk.to_csv(out_path, mode="a", index=False, header=not header_written)
                     header_written = True
                     rows_written += len(rows)

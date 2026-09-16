@@ -126,3 +126,23 @@ def fedavg_aggregate(client_params, client_num_examples: List[int]):
         )
         out.append(layer_acc)
     return out
+
+
+def recover_fedavg_coeffs(client_params, global_params, prev_params, tol: float = 1e-3):
+    """Per-client coefficients FedAvg used in one round, recovered from checkpoints.
+
+    FedAvg set global = sum_k c_k * client_k with c_k = n_k / sum(n). Every client
+    started the round from prev_params, so the same c also solves
+    (global - prev) = sum_k c_k * (client_k - prev), which is well conditioned where
+    the raw weights (all close to prev) are not. Returns None when the fit does not
+    rebuild the saved global model, e.g. a missing or stale client checkpoint.
+    """
+    flat = lambda params: np.concatenate([np.ravel(p) for p in params]).astype(np.float64)
+    prev = flat(prev_params)
+    D = np.stack([flat(c) - prev for c in client_params], axis=1)
+    d = flat(global_params) - prev
+    coeffs = np.linalg.lstsq(D.T @ D, D.T @ d, rcond=None)[0]
+    residual = np.linalg.norm(D @ coeffs - d) / max(np.linalg.norm(d), 1e-12)
+    if not (residual <= tol and abs(coeffs.sum() - 1.0) <= tol and coeffs.min() >= -tol):
+        return None
+    return np.clip(coeffs, 0.0, None)

@@ -18,7 +18,7 @@ entry names the concrete failure, not the smell.
 | Open — hygiene | A3, A8, A14, A16, A17, A18, A19, A20, A22, A23, A33 | No decision needed; none is urgent. |
 | Fixed 2026-09-15 on branch `direction-b` only (not merged) | A34 | CelebA attribute sidecar. Latent: no shipped number was affected. |
 | Documented 2026-09-15 | A35, A30 (second data point) | A35: ADULT codes s = female, CelebA s = male; every score is symmetric, and direction-b names group A explicitly. |
-| Open — needs a decision (2026-09-15) | A36, A37 | A36: LOO/GTG coalitions are a plain mean while FedAvg is size-weighted, which shifts every non-IID LOO contribution and changes what GTG attributes. A37: GTG's best-coalition step zeroes 25-80% of clients and breaks symmetry, although the Shapley estimate before it matches exact Shapley. |
+| Fixed 2026-09-16 on branch `direction-b` only (not merged) | A33, A36, A37 | Coalitions use FedAvg's own coefficients, recovered from the checkpoints. `<method>_shapley` carries a clean Shapley value (exact for K ≤ 6, balanced sampling above) beside the paper's `<method>_contribution`. The empty coalition is cached. Shipped columns stay reproducible from `master`. |
 
 **Branch note (2026-09-15):** every fix, fill and tool dated 2026-09-14/15 in this file is committed on
 branch `fills-eps-fix-2026-09-15` (`cfdbbe9`, pushed to `github` and `origin`, not merged). A `master`
@@ -269,8 +269,16 @@ round | saved global vs plain mean | vs size-weighted mean | acc: saved global |
   was never deployed (0.8245 against the real 0.8469 above).
 
 **Scope:** every non-IID LOO and GTG column in `data/combo`, and the direction-B gap columns if they
-are run unchanged. Not fixed: size-weighting the coalitions changes published numbers, so it needs a
-decision.
+are run unchanged.
+
+**Fixed 2026-09-16 on `direction-b`.** `weighted_utils.recover_fedavg_coeffs` recovers each client's
+FedAvg coefficient for a round by least squares on the client updates against the previous global;
+`cont_evals._coalition_coeffs` labels every row `size`, `equal` (equal partitions: plain mean, as
+shipped) or `fallback` (not recoverable: plain mean, and LOO then scores V(All) as that same plain
+mean). Verified with `gtg_check.py`: on adultnoniid at K=4 and K=20 the recovered coefficients equal
+the clients' training-size shares to five decimals (K=20 shares span 0.0003-0.106) and rebuild the
+saved global to 3e-7, and u(all clients) now equals u(saved global), so LOO's round-constant offset
+is gone. ADULT IID `l1o_acc` stays bit-identical to the pre-fix code.
 
 ### A37. GTG's best-coalition step zeroes most clients and breaks symmetry
 `gtg_shap.py` (`compute` -> `_find_best_subset`, `_calculate_best_subset_values`)
@@ -295,8 +303,27 @@ Measured with `gtg_check.py` (adultnoniid, K=4, seed 42, rounds 2 and 10; `acc`,
   (6 cases across the three metrics), gets a negative exact and pre-step value in all 6 and exactly 0
   from production GTG in all 6.
 
-Not fixed: dropping the step changes every GTG number. Keeping the pre-step vector next to the final
-one needs no extra model evaluations.
+**Two further defects in the same estimate, found in review on 2026-09-16.** They matter because the
+fix below promotes GTG's own estimate to a reported column:
+
+- The first player of each permutation cycles by index over a fixed 30 permutations, so at K=20
+  clients 0-9 start twice and clients 10-19 once. The first position carries the largest marginal,
+  and on a symmetric game (10 seeds) that inflates clients 0-9 by about 1.4x.
+- The within-permutation eps truncation compares u(all) with u(empty) at position 0, so a round whose
+  clients cancel out (u(all) ~= u(empty)) returns zeros for everyone even when individual clients move
+  the utility a lot. Gap utilities are non-monotone, so this is their typical case: on ADULT IID round
+  10, `_contribution` zeroed all five clients while exact Shapley was non-zero.
+
+**Fixed 2026-09-16 on `direction-b`.** `<method>_contribution` is still GTG exactly as the paper ran
+it. `<method>_shapley` is `gtg_shap.shapley_values`: exact over all 2^K coalitions for K <= 6 (at K=4
+that is the same 15 coalitions GTG already scores, so it costs nothing) and, above that, permutation
+sampling with no truncation and every client first equally often. Verified with `gtg_check.py`:
+`_shapley` equals an independent exact enumeration to <= 1e-17 in all 24 K=4 scenarios on ADULT iid
+and noniid, a duplicated client gets the same value as the original, and `evaluate_round` reproduces
+the harness exactly. At K=20 against a 200-permutation reference, `_shapley` (40 permutations) gives
+max|diff| 1.3e-2 / Spearman 0.87 on `acc` and 4.6e-3 / 0.94 on the accuracy gap, while
+`_contribution` gives Spearman 0.69 and 0.07 with 7/20 and 17/20 clients zeroed. Read K=20 gap columns
+from `_shapley`; raising the permutation count is the knob if its ~1e-2 noise matters.
 
 ---
 
@@ -649,8 +676,10 @@ survive eps-truncation (at most 14 for K=4, 570 for K=20): ~32-46 at K=4, ~32-60
 predicts GTG at 6.4-9.2x LOO wall time; the 2026-09-14 celebanoniid fills measured 6.4x (fair_eo) and
 7.0x (fair).
 
-**Not fixed.** Caching the empty coalition would cut both cost and noise, but for stochastic metrics it
-changes every published GTG number. Document, don't patch.
+**Fixed 2026-09-16 on `direction-b`** (the user chose to include it): the empty coalition is cached like
+any other subset, which removes 29 evaluations per round at K=4. Deterministic metrics (acc, loss, fair,
+res and the gaps) are unchanged; `rel` and the in-loop `rel` proxy now consume a different random stream,
+so those no longer reproduce the shipped numbers bit for bit — reproduce them from `master`.
 
 ---
 
