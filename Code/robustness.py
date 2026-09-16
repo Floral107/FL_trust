@@ -379,6 +379,10 @@ def evaluate_all(root_dir: str, dataset: str, partition: str, num_rounds: int, s
 
 def main():
     args = parse_arguments()
+    # The reliability metrics read L from the environment (robustness_metric.py).
+    # Without this the flag parsed fine and then did nothing at all.
+    if args.noise_samples is not None:
+        os.environ["FLR_NOISE_SAMPLES"] = str(args.noise_samples)
     seeds = [42, 107, 123, 2025, 9928] if args.seed == "all" else [int(args.seed)]
 
     root_dir = args.root_dir or (BASE_DIR if args.strategy == "fedavg" else "./420_fedprox")
