@@ -178,9 +178,14 @@ def calculate_tabular_robustness(
     Reliability under a mixed noise model:
       - one-hot columns: randomized response, p_keep calibrated from sigma
       - numeric columns: Gaussian noise N(0, sigma^2), clipped at 3*sigma
+
+    Honors FLR_NOISE_SAMPLES env var (set by robustness.py --noise_samples).
     """
     import tensorflow as tf
     import numpy as np
+
+    import os as _os
+    L = int(_os.environ.get("FLR_NOISE_SAMPLES", L))
 
     data = np.asarray(data, dtype=np.float32)
     N, D = data.shape
